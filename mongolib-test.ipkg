@@ -1,0 +1,8 @@
+package mongolib_test
+sourcedir = lib
+modules = DB.Mongo.Tests
+makefile = Makefile
+pkgs = mongolib, contrib
+objs = mongolib.o, mongolib.h
+executable = mongolib_test
+main = DB.Mongo.Tests

@@ -1,0 +1,7 @@
+package mongolib
+
+sourcedir = lib
+modules = DB.Mongo
+makefile = Makefile
+pkgs = contrib
+objs = mongolib.o, mongolib.h
