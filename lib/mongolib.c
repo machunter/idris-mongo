@@ -5,11 +5,13 @@
 int _collection_insert(mongoc_collection_t *collection, const bson_t *document) {
   bson_error_t error;
   mongoc_write_concern_t *write_concern = mongoc_write_concern_new ();
+  mongoc_write_concern_set_w(write_concern, MONGOC_WRITE_CONCERN_W_DEFAULT);
   bool result = mongoc_collection_insert (collection, MONGOC_INSERT_NONE, document,write_concern, &error);
   mongoc_write_concern_destroy(write_concern);
   if (result) {
     return 1;
   } else {
+    fprintf (stderr, "ERROR: %d.%d: %s\n", error.domain, error.code, error.message);
     return 0;
   }
 }
@@ -31,13 +33,41 @@ mongoc_cursor_t* _collection_find(mongoc_collection_t *collection, const bson_t 
 }
 
 
+int _collection_remove(mongoc_collection_t *collection, const bson_t *selector) {
+  bson_error_t error;
+  mongoc_write_concern_t *write_concern = mongoc_write_concern_new();
+  mongoc_write_concern_set_w(write_concern, MONGOC_WRITE_CONCERN_W_DEFAULT);
+  bool result = mongoc_collection_remove(collection, MONGOC_REMOVE_NONE, selector, write_concern, &error);
+  mongoc_write_concern_destroy(write_concern);
+  if (result) {
+    return 1;
+  } else {
+    fprintf (stderr, "ERROR: %d.%d: %s\n", error.domain, error.code, error.message);
+    return 0;
+  }
+}
+
+int _collection_find_and_modify(mongoc_collection_t *collection, const bson_t *query, const bson_t *update) {
+  bson_error_t error;
+  char *str1 = bson_as_json (query, NULL);
+  printf ("%s\n", str1);
+  char *str2 = bson_as_json (update, NULL);
+  printf ("%s\n", str2);
+  bson_free (str1);
+  bson_free (str2);
+
+  bool result = mongoc_collection_find_and_modify(collection, query, NULL, update, NULL, false, true, false, NULL, &error);
+  if (!result) {
+    fprintf (stderr, "ERROR: %d.%d: %s\n", error.domain, error.code, error.message);
+    return 0;
+  }
+  return 1;
+}
+
 bson_t * _cursor_next(mongoc_cursor_t* cursor) {
   bson_t *bson = bson_new();
 
   bool result = mongoc_cursor_next (cursor, (const bson_t **) &bson);
-  char *str = bson_as_json (bson, NULL);
-  printf ("%s\n", str);
-  bson_free (str);
 
   if (result) {
     return bson;

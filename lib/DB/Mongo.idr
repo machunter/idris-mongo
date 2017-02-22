@@ -16,6 +16,11 @@ _write_concern_new = foreign FFI_C "mongoc_write_concern_new" (IO Ptr)
 _write_concern_destroy : Ptr -> IO ()
 _write_concern_destroy concern_ptr = foreign FFI_C "mongoc_write_concern_destroy" (Ptr -> IO ()) concern_ptr
 
+_collection_remove : Ptr -> Ptr -> IO Int
+_collection_remove collection selector = foreign FFI_C "_collection_remove" (Ptr -> Ptr -> IO Int) collection selector
+
+_collection_update : Ptr -> Ptr -> Ptr -> IO Int
+_collection_update collection query update = foreign FFI_C "_collection_find_and_modify" (Ptr -> Ptr -> Ptr -> IO Int) collection query update
 
 export
 init : IO ()
@@ -42,8 +47,8 @@ client_get_collection : Ptr -> String -> String -> IO Ptr
 client_get_collection handle db collection = foreign FFI_C "mongoc_client_get_collection" (Ptr -> String -> String -> IO Ptr) handle db collection
 
 export
-collection_insert : Ptr -> String -> Ptr -> IO Bool
-collection_insert collection document error = do
+collection_insert : Ptr -> String -> IO Bool
+collection_insert collection document = do
   d <- DB.Mongo.Bson.new_from_json document
   z <-  _collection_insert collection d
   DB.Mongo.Bson.destroy d
@@ -58,3 +63,22 @@ collection_find collection filter opts  = foreign FFI_C "_collection_find" (Ptr 
 export
 cursor_next : Ptr -> IO Ptr
 cursor_next cursor = foreign FFI_C "_cursor_next" (Ptr -> IO Ptr) cursor
+
+export
+collection_remove : Ptr -> String -> IO Bool
+collection_remove collection selector = do
+  s <- DB.Mongo.Bson.new_from_json selector
+  z <- _collection_remove collection s
+  case z of
+    0 => pure False
+    _ => pure True
+
+export
+collection_update : Ptr -> String -> String -> IO (Maybe Bool)
+collection_update collection query update = do
+  query_bson <- DB.Mongo.Bson.new_from_json query
+  update_bson <- DB.Mongo.Bson.new_from_json update
+  result <- _collection_update collection query_bson update_bson
+  case result of
+    0 => pure Nothing
+    1 => pure (Just True)

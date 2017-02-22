@@ -1,3 +1,6 @@
+
 *.o
 *.a
 *.ibc
+*.
+mongolib_test
