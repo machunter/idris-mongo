@@ -24,11 +24,11 @@ bson_t* _bson_new_from_json (char *json_string) {
 }
 
 
-mongoc_cursor_t* _collection_find(mongoc_collection_t *collection, const bson_t * filters,const bson_t * opts){
+mongoc_cursor_t* _collection_find(mongoc_collection_t *collection, const bson_t * filters, const bson_t * opts){
+
   mongoc_read_prefs_t * read_prefs = mongoc_read_prefs_new(MONGOC_READ_NEAREST);
   mongoc_cursor_t* cursor = mongoc_collection_find_with_opts(collection, filters, opts, read_prefs);
   mongoc_read_prefs_destroy(read_prefs);
-
  return cursor;
 }
 
