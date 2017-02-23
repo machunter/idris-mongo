@@ -13,8 +13,7 @@ namespace Main
     DB.Mongo.collection_insert collection "{\"name\":\"burc\",\"age\":50}"
     cursor <- DB.Mongo.collection_find collection "{\"name\":\"burc\",\"age\":50}" Nothing
     doc <- DB.Mongo.cursor_next cursor
-    json_string <- DB.Mongo.Bson.as_json doc
-    printLn(json_string)
+    printLn(doc)
     update <- DB.Mongo.collection_update collection "{\"name\":\"burc\"}" "{\"$set\":{\"age\": 55}}"
     cursor2 <- DB.Mongo.collection_find collection "{\"name\":\"burc\"}" Nothing
     doc2 <- DB.Mongo.cursor_next cursor2
@@ -22,6 +21,9 @@ namespace Main
     printLn(json_string2)
     r <- DB.Mongo.collection_remove collection "{\"name\":\"burc\"}"
     DB.Mongo.Bson.destroy doc
+    DB.Mongo.cursor_destroy cursor
+    DB.Mongo.cursor_destroy cursor2
+    DB.Mongo.collection_destroy collection
     DB.Mongo.client_destroy handle
     DB.Mongo.cleanup
     printLn("Done")

@@ -25,6 +25,21 @@ _collection_update collection query update = foreign FFI_C "_collection_find_and
 _collection_find : Ptr -> Ptr -> Ptr -> IO Ptr
 _collection_find collection filter opts  = foreign FFI_C "_collection_find" (Ptr -> Ptr -> Ptr -> IO Ptr) collection filter opts
 
+_cursor_next : Ptr -> IO Ptr
+_cursor_next cursor = foreign FFI_C "_cursor_next" (Ptr -> IO Ptr) cursor
+
+export
+data DBDoc : Type where
+  MkDBDoc: (bson: Ptr) -> DBDoc
+
+bson : DBDoc -> Ptr
+bson (MkDBDoc ptr) = ptr
+
+Show DBDoc where
+     show (MkDBDoc ptr) = do
+      let x = DB.Mongo.Bson.as_json ptr
+      x
+
 
 export
 init : IO ()
@@ -61,8 +76,12 @@ collection_insert collection document = do
     _ => pure True
 
 export
-cursor_next : Ptr -> IO Ptr
-cursor_next cursor = foreign FFI_C "_cursor_next" (Ptr -> IO Ptr) cursor
+cursor_next : Ptr -> IO DBDoc
+cursor_next cursor = do
+  bson_data <- _cursor_next cursor
+  pure (MkDBDoc bson_data)
+
+
 
 export
 collection_remove : Ptr -> String -> IO Bool
@@ -86,6 +105,13 @@ collection_update collection query update = do
     0 => pure Nothing
     1 => pure (Just True)
 
+export
+collection_destroy : Ptr -> IO()
+collection_destroy collection = foreign FFI_C "mongoc_collection_destroy" (Ptr -> IO()) collection
+
+export
+cursor_destroy : Ptr -> IO ()
+cursor_destroy cursor = foreign FFI_C "mongoc_cursor_destroy" (Ptr -> IO()) cursor
 
 export
 collection_find : Ptr -> String -> Maybe String -> IO Ptr
