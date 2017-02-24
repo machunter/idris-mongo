@@ -49,12 +49,6 @@ int _collection_remove(mongoc_collection_t *collection, const bson_t *selector) 
 
 int _collection_find_and_modify(mongoc_collection_t *collection, const bson_t *query, const bson_t *update) {
   bson_error_t error;
-  char *str1 = bson_as_json (query, NULL);
-  printf ("%s\n", str1);
-  char *str2 = bson_as_json (update, NULL);
-  printf ("%s\n", str2);
-  bson_free (str1);
-  bson_free (str2);
 
   bool result = mongoc_collection_find_and_modify(collection, query, NULL, update, NULL, false, true, false, NULL, &error);
   if (!result) {

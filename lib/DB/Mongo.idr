@@ -30,16 +30,16 @@ _cursor_next cursor = foreign FFI_C "_cursor_next" (Ptr -> IO Ptr) cursor
 
 export
 data DBDoc : Type where
-  MkDBDoc: (bson: Ptr) -> DBDoc
+  MkDBDoc: (bson_string: String) -> DBDoc
 
-bson : DBDoc -> Ptr
-bson (MkDBDoc ptr) = ptr
+bson_string : DBDoc -> String
+bson_string (MkDBDoc bson_string) = bson_string
 
+
+
+export
 Show DBDoc where
-     show (MkDBDoc ptr) = do
-      let x = DB.Mongo.Bson.as_json ptr
-      x
-
+  show (MkDBDoc bson_string) = bson_string
 
 export
 init : IO ()
@@ -76,12 +76,14 @@ collection_insert collection document = do
     _ => pure True
 
 export
-cursor_next : Ptr -> IO DBDoc
+cursor_next : Ptr -> IO (Maybe DBDoc)
 cursor_next cursor = do
-  bson_data <- _cursor_next cursor
-  pure (MkDBDoc bson_data)
-
-
+  res <- _cursor_next cursor
+  if (res == null) then
+    pure Nothing
+  else do
+        next <- DB.Mongo.Bson.as_json res
+        pure (Just (MkDBDoc next))
 
 export
 collection_remove : Ptr -> String -> IO Bool
