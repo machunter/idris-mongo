@@ -7,8 +7,8 @@ import DB.Mongo.Bson
 %link    C "mongolib.o"
 %include C "mongolib.h"
 
-_collection_insert : Ptr -> Ptr -> IO Int
-_collection_insert  collection document = foreign FFI_C "_collection_insert" (Ptr -> Ptr -> IO Int) collection document
+_collection_insert : Ptr -> BSON -> IO Int
+_collection_insert  collection (MkBSON bson_handle) = foreign FFI_C "_collection_insert" (Ptr -> Ptr -> IO Int) collection bson_handle
 
 _write_concern_new : IO Ptr
 _write_concern_new = foreign FFI_C "mongoc_write_concern_new" (IO Ptr)
@@ -16,17 +16,21 @@ _write_concern_new = foreign FFI_C "mongoc_write_concern_new" (IO Ptr)
 _write_concern_destroy : Ptr -> IO ()
 _write_concern_destroy concern_ptr = foreign FFI_C "mongoc_write_concern_destroy" (Ptr -> IO ()) concern_ptr
 
-_collection_remove : Ptr -> Ptr -> IO Int
-_collection_remove collection selector = foreign FFI_C "_collection_remove" (Ptr -> Ptr -> IO Int) collection selector
+_collection_remove : Ptr -> BSON -> IO Int
+_collection_remove collection (MkBSON selector_handle) = foreign FFI_C "_collection_remove" (Ptr -> Ptr -> IO Int) collection selector_handle
 
-_collection_update : Ptr -> Ptr -> Ptr -> IO Int
-_collection_update collection query update = foreign FFI_C "_collection_find_and_modify" (Ptr -> Ptr -> Ptr -> IO Int) collection query update
+_collection_update : Ptr -> BSON -> BSON -> IO Int
+_collection_update collection (MkBSON query_handle) (MkBSON update_handle) =
+  foreign FFI_C "_collection_find_and_modify" (Ptr -> Ptr -> Ptr -> IO Int) collection query_handle update_handle
 
-_collection_find : Ptr -> Ptr -> Ptr -> IO Ptr
-_collection_find collection filter opts  = foreign FFI_C "_collection_find" (Ptr -> Ptr -> Ptr -> IO Ptr) collection filter opts
+_collection_find : Ptr -> BSON -> BSON -> IO Ptr
+_collection_find collection (MkBSON filter_handle) (MkBSON opts_handle)  =
+  foreign FFI_C "_collection_find" (Ptr -> Ptr -> Ptr -> IO Ptr) collection filter_handle opts_handle
 
-_cursor_next : Ptr -> IO Ptr
-_cursor_next cursor = foreign FFI_C "_cursor_next" (Ptr -> IO Ptr) cursor
+_cursor_next : Ptr -> IO (Maybe BSON)
+_cursor_next cursor = do
+  doc_handle <- foreign FFI_C "_cursor_next" (Ptr -> IO Ptr) cursor
+  if (doc_handle == null) then pure Nothing else pure (Just (MkBSON doc_handle))
 
 export
 data DBDoc : Type where
@@ -124,13 +128,13 @@ export
 cursor_next : (cursor : DBCursor) -> IO (Maybe DBDoc)
 cursor_next (MkDBCursor cursor_handle) = do
   res <- _cursor_next cursor_handle
-  if (res == null) then
-    pure Nothing
-  else do
-        next <- DB.Mongo.Bson.as_json res
-        let result = (Just (MkDBDoc next))
-        DB.Mongo.Bson.destroy res
-        pure result
+  case res of
+    Nothing => pure Nothing
+    Just value => do
+            next <- DB.Mongo.Bson.as_json value
+            let result = (Just (MkDBDoc next))
+            DB.Mongo.Bson.destroy value
+            pure result
 
 ||| removes documents matching the query, returns true if deletion occured
 ||| @collection the collection to query
