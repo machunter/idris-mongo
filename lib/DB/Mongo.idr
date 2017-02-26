@@ -10,9 +10,7 @@ import DB.Mongo.Bson
 _collection_insert : Ptr -> BSON -> IO (Maybe Bool)
 _collection_insert  collection (MkBSON bson_handle) = do
     result <- foreign FFI_C "_collection_insert" (Ptr -> Ptr -> IO Int) collection bson_handle
-    case result of
-      0 => pure Nothing
-      _ => pure (Just True)
+    if (result == 0) then pure Nothing else pure (Just True)
 
 _write_concern_new : IO Ptr
 _write_concern_new = foreign FFI_C "mongoc_write_concern_new" (IO Ptr)
@@ -25,9 +23,10 @@ _collection_remove collection (MkBSON selector_handle) = do
   result <- foreign FFI_C "_collection_remove" (Ptr -> Ptr -> IO Int) collection selector_handle
   if (result == 0) then pure Nothing else pure (Just True)
 
-_collection_update : Ptr -> BSON -> BSON -> IO Int
-_collection_update collection (MkBSON query_handle) (MkBSON update_handle) =
-  foreign FFI_C "_collection_find_and_modify" (Ptr -> Ptr -> Ptr -> IO Int) collection query_handle update_handle
+_collection_update : Ptr -> BSON -> BSON -> IO (Maybe Bool)
+_collection_update collection (MkBSON query_handle) (MkBSON update_handle) = do
+  result <- foreign FFI_C "_collection_find_and_modify" (Ptr -> Ptr -> Ptr -> IO Int) collection query_handle update_handle
+  if (result == 0) then pure Nothing else pure (Just True)
 
 _collection_find : Ptr -> BSON -> BSON -> IO Ptr
 _collection_find collection (MkBSON filter_handle) (MkBSON opts_handle)  =
@@ -160,9 +159,7 @@ collection_update (MkDBCollection collection_handle) query update = do
   result <- _collection_update collection_handle query_bson update_bson
   DB.Mongo.Bson.destroy query_bson
   DB.Mongo.Bson.destroy update_bson
-  case result of
-    0 => pure Nothing
-    1 => pure (Just True)
+  pure result
 
 ||| destroys the collection reference
 ||| @collection the collection reference
