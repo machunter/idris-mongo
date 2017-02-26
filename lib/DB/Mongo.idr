@@ -7,8 +7,12 @@ import DB.Mongo.Bson
 %link    C "mongolib.o"
 %include C "mongolib.h"
 
-_collection_insert : Ptr -> BSON -> IO Int
-_collection_insert  collection (MkBSON bson_handle) = foreign FFI_C "_collection_insert" (Ptr -> Ptr -> IO Int) collection bson_handle
+_collection_insert : Ptr -> BSON -> IO (Maybe Bool)
+_collection_insert  collection (MkBSON bson_handle) = do
+    result <- foreign FFI_C "_collection_insert" (Ptr -> Ptr -> IO Int) collection bson_handle
+    case result of
+      0 => pure Nothing
+      _ => pure (Just True)
 
 _write_concern_new : IO Ptr
 _write_concern_new = foreign FFI_C "mongoc_write_concern_new" (IO Ptr)
@@ -97,14 +101,12 @@ client_get_collection (MkDBConnection connection_handle) db_name collection_name
 ||| @collection a reference to the desired collection
 ||| @document a valid stringified json object
 export
-collection_insert : (collection : DBCollection) -> (document : String) -> IO (Maybe ())
+collection_insert : (collection : DBCollection) -> (document : String) -> IO (Maybe Bool)
 collection_insert (MkDBCollection collection_handle) document = do
   d <- DB.Mongo.Bson.new_from_json (Just document)
-  z <-  _collection_insert collection_handle d
+  result <-  _collection_insert collection_handle d
   DB.Mongo.Bson.destroy d
-  case z of
-    0 => pure Nothing
-    _ => pure (Just ())
+  pure result
 
 ||| queries the collection and returns a reference to a cursor which can be used to retrieve documents
 ||| see: http://mongoc.org/libmongoc/current/mongoc_collection_find_with_opts.html
@@ -127,14 +129,11 @@ collection_find (MkDBCollection collection_handle) filter options = do
 export
 cursor_next : (cursor : DBCursor) -> IO (Maybe DBDoc)
 cursor_next (MkDBCursor cursor_handle) = do
-  res <- _cursor_next cursor_handle
-  case res of
-    Nothing => pure Nothing
-    Just value => do
-            next <- DB.Mongo.Bson.as_json value
-            let result = (Just (MkDBDoc next))
-            DB.Mongo.Bson.destroy value
-            pure result
+  Just value  <- _cursor_next cursor_handle | pure Nothing
+  next <- DB.Mongo.Bson.as_json value
+  let result = (Just (MkDBDoc next))
+  DB.Mongo.Bson.destroy value
+  pure result
 
 ||| removes documents matching the query, returns true if deletion occured
 ||| @collection the collection to query
