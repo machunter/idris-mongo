@@ -90,21 +90,21 @@ client_set_error_api (MkDBConnection connection_handle) error_level = foreign FF
 export
 client_get_collection : (db_client : DBConnection) -> (db_name : String) -> (collection_name : String) -> IO DBCollection
 client_get_collection (MkDBConnection connection_handle) db_name collection_name = do
-  collection_handle <- foreign FFI_C "mongoc_client_get_collection" (Ptr -> String -> String -> IO Ptr) connection_handle db_name collection_name
+  collection_handle <- foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) connection_handle db_name collection_name
   pure (MkDBCollection collection_handle)
 
 ||| inserts a stringified json object into a collection_destroy, return true if successful
 ||| @collection a reference to the desired collection
 ||| @document a valid stringified json object
 export
-collection_insert : (collection : DBCollection) -> (document : String) -> IO Bool
+collection_insert : (collection : DBCollection) -> (document : String) -> IO (Maybe ())
 collection_insert (MkDBCollection collection_handle) document = do
   d <- DB.Mongo.Bson.new_from_json (Just document)
   z <-  _collection_insert collection_handle d
   DB.Mongo.Bson.destroy d
   case z of
-    0 => pure False
-    _ => pure True
+    0 => pure Nothing
+    _ => pure (Just ())
 
 ||| queries the collection and returns a reference to a cursor which can be used to retrieve documents
 ||| see: http://mongoc.org/libmongoc/current/mongoc_collection_find_with_opts.html

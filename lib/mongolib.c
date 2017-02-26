@@ -58,6 +58,12 @@ int _collection_find_and_modify(mongoc_collection_t *collection, const bson_t *q
   return 1;
 }
 
+
+mongoc_collection_t * _client_get_collection (mongoc_client_t *client, const char *db, const char *collection) {
+  mongoc_collection_t * collection_ptr =  mongoc_client_get_collection (client,db,collection);
+  return collection_ptr;
+}
+
 bson_t * _cursor_next(mongoc_cursor_t* cursor) {
   bson_t *bson = bson_new();
 
