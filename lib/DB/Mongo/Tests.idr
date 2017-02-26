@@ -4,20 +4,15 @@ import DB.Mongo.Bson
 
 connection_failure_path : IO ()
 connection_failure_path = do
-    printLn("Starting Failure Path")
     db <- DB.Mongo.client_new "mongodb://192.168.99.101:27017"
     collection <- DB.Mongo.client_get_collection db "testdb" "testcoll"
-    x <- DB.Mongo.collection_insert collection "{\"name\":\"burc\",\"age\":50}"
-    case x of
-      Nothing => printLn("Failure caught!")
-      Just _ => printLn("Failure not caugth")
+    Just result <- DB.Mongo.collection_insert collection "{\"name\":\"burc\",\"age\":50}" | Nothing => printLn("Failure caught!")
+    printLn("Failure not caugth")
     DB.Mongo.collection_destroy collection
     DB.Mongo.client_destroy db
-    printLn("Done Failure Path")
 
 nice_path : IO ()
 nice_path = do
-    printLn("Starting Nice Path")
     -- connect to db server
     db <- DB.Mongo.client_new "mongodb://192.168.99.100:27017"
     -- set the error level
@@ -55,7 +50,7 @@ nice_path = do
     -- close database
     DB.Mongo.client_destroy db
     -- clean up memory
-    printLn("Done Nice Path")
+
 
 
 
@@ -64,7 +59,11 @@ namespace Main
   main = do
     -- init library
     DB.Mongo.init
+    printLn("Starting Nice Path")
     nice_path
+    printLn("Done Nice Path")
+    printLn("Starting Failure Path")
     connection_failure_path
+    printLn("Done Failure Path")
     DB.Mongo.cleanup
     printLn("Done")
