@@ -20,8 +20,10 @@ _write_concern_new = foreign FFI_C "mongoc_write_concern_new" (IO Ptr)
 _write_concern_destroy : Ptr -> IO ()
 _write_concern_destroy concern_ptr = foreign FFI_C "mongoc_write_concern_destroy" (Ptr -> IO ()) concern_ptr
 
-_collection_remove : Ptr -> BSON -> IO Int
-_collection_remove collection (MkBSON selector_handle) = foreign FFI_C "_collection_remove" (Ptr -> Ptr -> IO Int) collection selector_handle
+_collection_remove : Ptr -> BSON -> IO (Maybe Bool)
+_collection_remove collection (MkBSON selector_handle) = do
+  result <- foreign FFI_C "_collection_remove" (Ptr -> Ptr -> IO Int) collection selector_handle
+  if (result == 0) then pure Nothing else pure (Just True)
 
 _collection_update : Ptr -> BSON -> BSON -> IO Int
 _collection_update collection (MkBSON query_handle) (MkBSON update_handle) =
@@ -139,14 +141,12 @@ cursor_next (MkDBCursor cursor_handle) = do
 ||| @collection the collection to query
 ||| @selector a valid stringified json query
 export
-collection_remove : (collection : DBCollection) -> (selector : String) -> IO Bool
+collection_remove : (collection : DBCollection) -> (selector : String) -> IO (Maybe Bool)
 collection_remove (MkDBCollection collection_handle) selector = do
-  s <- DB.Mongo.Bson.new_from_json (Just selector)
-  z <- _collection_remove collection_handle s
-  DB.Mongo.Bson.destroy s
-  case z of
-    0 => pure False
-    _ => pure True
+  bson_selector <- DB.Mongo.Bson.new_from_json (Just selector)
+  result <- _collection_remove collection_handle bson_selector
+  DB.Mongo.Bson.destroy bson_selector
+  pure result
 
 ||| update the first document matching the query
 ||| @collection the collection to search
