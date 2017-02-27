@@ -2,6 +2,9 @@ module DB.Mongo.Tests
 import DB.Mongo
 import DB.Mongo.Bson
 
+server_uri : String
+server_uri = "mongodb://192.168.99.100:27017"
+
 connection_failure_path : IO ()
 connection_failure_path = do
     db <- DB.Mongo.client_new "mongodb://192.168.99.101:27017"
@@ -11,10 +14,25 @@ connection_failure_path = do
     DB.Mongo.collection_destroy collection
     DB.Mongo.client_destroy db
 
+update_flags_test : IO ()
+update_flags_test = do
+  db <- DB.Mongo.client_new server_uri
+  collection <- DB.Mongo.client_get_collection db "testdb" "test_update"
+  DB.Mongo.collection_insert collection "{\"name\":\"burc\",\"age\":50}"
+  DB.Mongo.collection_insert collection "{\"name\":\"burc\",\"age\":35}"
+  DB.Mongo.collection_update collection "{\"name\":\"burc\"}" "{\"$set\":{\"name\": \"bora\"}}" DB.Mongo.MONGOC_UPDATE_MULTI_UPDATE
+  cursor <- DB.Mongo.collection_find collection "{\"name\":\"burc\"}" Nothing
+  value  <- DB.Mongo.cursor_next cursor
+  case value of
+    Nothing => printLn("Success: no record with name burc")
+    Just _ => printLn("Failure: not all records renamed")
+  DB.Mongo.collection_destroy collection
+  DB.Mongo.client_destroy db
+
 nice_path : IO ()
 nice_path = do
     -- connect to db server
-    db <- DB.Mongo.client_new "mongodb://192.168.99.100:27017"
+    db <- DB.Mongo.client_new server_uri
     -- set the error level
     -- DB.Mongo.client_set_error_api db 2
     -- get a collection handler
@@ -34,7 +52,7 @@ nice_path = do
     -- remove one record
     DB.Mongo.collection_remove collection "{\"name\":\"burc\",\"age\":50}"
     -- update the one record
-    update <- DB.Mongo.collection_update collection "{\"name\":\"burc\"}" "{\"$set\":{\"age\": 55}}"
+    update <- DB.Mongo.collection_find_and_modify collection "{\"name\":\"burc\"}" "{\"$set\":{\"age\": 55}}"
     -- get a cursor
     cursor2 <- DB.Mongo.collection_find collection "{\"name\":\"burc\"}" Nothing
     -- should show the updated record
@@ -65,5 +83,6 @@ namespace Main
     printLn("Starting Failure Path")
     connection_failure_path
     printLn("Done Failure Path")
+    update_flags_test
     DB.Mongo.cleanup
     printLn("Done")

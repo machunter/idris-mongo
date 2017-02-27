@@ -15,3 +15,5 @@ bson_t* _bson_new_from_json (char *json_string);
 bson_t * _cursor_next(mongoc_cursor_t* cursor);
 
 mongoc_collection_t * _client_get_collection (mongoc_client_t *client, const char *db, const char *collection);
+
+bool _collection_update(mongoc_collection_t *collection, const bson_t *selector, const bson_t *update, int update_flags);

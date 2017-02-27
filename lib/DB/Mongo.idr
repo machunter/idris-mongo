@@ -23,8 +23,8 @@ _collection_remove collection (MkBSON selector_handle) = do
   result <- foreign FFI_C "_collection_remove" (Ptr -> Ptr -> IO Int) collection selector_handle
   if (result == 0) then pure Nothing else pure (Just True)
 
-_collection_update : Ptr -> BSON -> BSON -> IO (Maybe Bool)
-_collection_update collection (MkBSON query_handle) (MkBSON update_handle) = do
+_collection_find_and_modify : Ptr -> BSON -> BSON -> IO (Maybe Bool)
+_collection_find_and_modify collection (MkBSON query_handle) (MkBSON update_handle) = do
   result <- foreign FFI_C "_collection_find_and_modify" (Ptr -> Ptr -> Ptr -> IO Int) collection query_handle update_handle
   if (result == 0) then pure Nothing else pure (Just True)
 
@@ -36,6 +36,11 @@ _cursor_next : Ptr -> IO (Maybe BSON)
 _cursor_next cursor = do
   doc_handle <- foreign FFI_C "_cursor_next" (Ptr -> IO Ptr) cursor
   if (doc_handle == null) then pure Nothing else pure (Just (MkBSON doc_handle))
+
+_collection_update : Ptr -> BSON -> BSON -> Int -> IO (Maybe Bool)
+_collection_update collection (MkBSON selector_handle) (MkBSON update_handle) update_flags = do
+  result <- foreign FFI_C "_collection_update" (Ptr -> Ptr -> Ptr -> Int -> IO Int) collection selector_handle update_handle update_flags
+  if (result == 0) then pure Nothing else pure (Just True)
 
 export
 data DBDoc : Type where
@@ -52,6 +57,23 @@ data DBCollection : Type where
 export
 data DBCursor : Type where
   MkDBCursor : (cursor : Ptr) -> DBCursor
+
+export
+DBUpdateFlags : Type
+DBUpdateFlags = Int
+
+export
+MONGOC_UPDATE_NONE : DBUpdateFlags
+MONGOC_UPDATE_NONE = 0
+
+export
+MONGOC_UPDATE_UPSERT : DBUpdateFlags
+MONGOC_UPDATE_UPSERT = 1
+
+export
+MONGOC_UPDATE_MULTI_UPDATE : DBUpdateFlags
+MONGOC_UPDATE_MULTI_UPDATE = 2
+
 
 export
 Show DBDoc where
@@ -152,11 +174,11 @@ collection_remove (MkDBCollection collection_handle) selector = do
 ||| @query the query to match
 ||| @update the update stringified json object
 export
-collection_update : (collection : DBCollection) -> (query : String) -> (update : String) -> IO (Maybe Bool)
-collection_update (MkDBCollection collection_handle) query update = do
+collection_find_and_modify : (collection : DBCollection) -> (query : String) -> (update : String) -> IO (Maybe Bool)
+collection_find_and_modify (MkDBCollection collection_handle) query update = do
   query_bson <- DB.Mongo.Bson.new_from_json (Just query)
   update_bson <- DB.Mongo.Bson.new_from_json (Just update)
-  result <- _collection_update collection_handle query_bson update_bson
+  result <- _collection_find_and_modify collection_handle query_bson update_bson
   DB.Mongo.Bson.destroy query_bson
   DB.Mongo.Bson.destroy update_bson
   pure result
@@ -172,3 +194,13 @@ collection_destroy (MkDBCollection collection_handle) = foreign FFI_C "mongoc_co
 export
 cursor_destroy : (cursor : DBCursor) -> IO ()
 cursor_destroy (MkDBCursor cursor_handle) = foreign FFI_C "mongoc_cursor_destroy" (Ptr -> IO()) cursor_handle
+
+export
+collection_update : (collection : DBCollection) -> (selector: String) -> (update : String) -> (flags : DBUpdateFlags) -> IO (Maybe Bool)
+collection_update (MkDBCollection collection_handle) selector update flags = do
+  selector_bson <- DB.Mongo.Bson.new_from_json (Just selector)
+  update_bson <- DB.Mongo.Bson.new_from_json (Just update)
+  result <- _collection_update collection_handle selector_bson update_bson flags
+  DB.Mongo.Bson.destroy selector_bson
+  DB.Mongo.Bson.destroy update_bson
+  pure result

@@ -58,6 +58,22 @@ int _collection_find_and_modify(mongoc_collection_t *collection, const bson_t *q
   return 1;
 }
 
+bool _collection_update(mongoc_collection_t *collection, const bson_t *selector, const bson_t *update, int update_flags) {
+  bson_error_t error;
+  mongoc_write_concern_t *write_concern = mongoc_write_concern_new();
+  mongoc_write_concern_set_w(write_concern, MONGOC_WRITE_CONCERN_W_DEFAULT);
+  bool result = mongoc_collection_update (collection, update_flags, selector, update, write_concern, &error);
+
+  mongoc_write_concern_destroy(write_concern);
+  if (result) {
+    return 1;
+  } else {
+    fprintf (stderr, "ERROR: %d.%d: %s\n", error.domain, error.code, error.message);
+    return 0;
+  }
+}
+
+
 
 mongoc_collection_t * _client_get_collection (mongoc_client_t *client, const char *db, const char *collection) {
   mongoc_collection_t * collection_ptr =  mongoc_client_get_collection (client,db,collection);
