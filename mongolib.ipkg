@@ -1,5 +1,4 @@
 package mongolib
-
 sourcedir = lib
 modules = DB.Mongo, DB.Mongo.Bson
 makefile = Makefile

@@ -1,11 +1,14 @@
 module DB.Mongo
 import CFFI
 import DB.Mongo.Bson
+import Control.Monad.State
 
 %lib     C "bson-1.0.0"
 %lib     C "mongoc-1.0.0"
 %link    C "mongolib.o"
 %include C "mongolib.h"
+
+
 
 _collection_insert : Ptr -> BSON -> IO (Maybe Bool)
 _collection_insert  collection (MkBSON bson_handle) = do
@@ -47,12 +50,98 @@ data DBDoc : Type where
   MkDBDoc: (bson_string: String) -> DBDoc
 
 export
-data DBConnection : Type where
-  MkDBConnection : (connection : Ptr) -> DBConnection
+record DBConnection where
+  constructor MkDBConnection
+  handle : Ptr
 
 export
-data DBCollection : Type where
-  MkDBCollection : (collection : Ptr) -> DBCollection
+record DBCollection where
+  constructor MkDBCollection
+  handle : Ptr
+
+export
+data DBConnectionState : Type -> Type where
+  GetConnection : DBConnectionState DBConnection
+  PutConnection : DBConnection -> DBConnectionState ()
+  ConnBind : DBConnectionState a -> (a -> DBConnectionState b) -> DBConnectionState b
+  IOBindDBConnection : IO a -> (a -> DBConnectionState b) -> DBConnectionState b
+  PureConnectionState : ty -> DBConnectionState ty
+
+namespace DBConnectionStateDo
+  (>>=) : DBConnectionState a -> (a -> DBConnectionState b) -> DBConnectionState b
+  (>>=) = ConnBind
+
+namespace DBConnectionStateChainer
+  (>>=) : IO a -> (a -> DBConnectionState b) -> DBConnectionState b
+  (>>=) = IOBindDBConnection
+
+export
+data DBCollectionState : Type -> Type where
+  GetCollection : DBCollectionState DBCollection
+  PutCollection : DBCollection -> DBCollectionState ()
+  CollectionBind : DBCollectionState a -> (a -> DBCollectionState b) -> DBCollectionState b
+  IOBindDBCollection : IO a -> (a -> DBCollectionState b) -> DBCollectionState b
+  DBConnectionBindDBCollection : DBConnectionState a -> (a -> DBCollectionState b) -> DBCollectionState b
+  PureCollectionState : ty -> DBCollectionState ty
+
+namespace CollectionBindDo
+  (>>=) : DBCollectionState a -> (a -> DBCollectionState b) -> DBCollectionState b
+  (>>=) = CollectionBind
+
+namespace IOBindDBCollectionDo
+  (>>=) : IO a -> (a -> DBCollectionState b) -> DBCollectionState b
+  (>>=) = IOBindDBCollection
+
+namespace DBConnectionBindDBCollectionDo
+  (>>=) : DBConnectionState a -> (a -> DBCollectionState b) -> DBCollectionState b
+  (>>=) = DBConnectionBindDBCollection
+
+
+export
+data IODatabase : Type -> Type where
+  Bind : IODatabase a -> (a -> IODatabase b) -> IODatabase b
+  DBConnectionBindIODatabaseBind : DBConnectionState a -> (a -> IODatabase b) -> IODatabase b
+  DBCollectionBindIO : DBCollectionState a -> (a -> IO b) -> IODatabase b
+  DBCollectionBind : DBCollectionState a -> (a -> IODatabase b) -> IODatabase b
+  IOBindIODatabase : IO a -> (a -> IODatabase b) -> IODatabase b
+  PureIODatabase : ty -> IODatabase ty
+
+mutual
+  Functor IODatabase where
+    map func x = do
+      val <- x
+      pure (func val)
+
+  Applicative IODatabase where
+    pure = PureIODatabase
+    (<*>) f a = do
+      f' <- f
+      a' <- a
+      pure (f' a')
+
+  export
+  Monad IODatabase where
+    (>>=) = Bind
+
+namespace IODatabaseBindDo
+  (>>=) : IODatabase a -> (a -> IODatabase b) -> IODatabase b
+  (>>=) = Bind
+
+namespace DBConnectionStateBindDo
+  (>>=) : DBConnectionState a -> (a -> IODatabase b) -> IODatabase b
+  (>>=) = DBConnectionBindIODatabaseBind
+
+namespace IOBindIODatabaseDo
+  (>>=) : IO a -> (a -> IODatabase b) -> IODatabase b
+  (>>=) = IOBindIODatabase
+
+namespace DBCollectionBindIODo
+  (>>=) : DBCollectionState a -> (a -> IO b) -> IODatabase b
+  (>>=) = DBCollectionBindIO
+
+namespace DBCollectionBindDo
+  (>>=) : DBCollectionState a -> (a -> IODatabase b) -> IODatabase b
+  (>>=) = DBCollectionBind
 
 export
 data DBCursor : Type where
@@ -92,48 +181,70 @@ cleanup = foreign FFI_C "mongoc_cleanup" (IO ())
 ||| creates a new client (db connection) which must be destroyed by calling client_destroy
 ||| @uri the mongodb compatible uri of the form mongodb://x.x.x.x:port
 export
-client_new : (uri : String) -> IO DBConnection
+client_new : (uri : String) -> IODatabase ()
+-- client_new uri = do
+--                   connection_handle <- foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri
+--                   put (MkDBConnection connection_handle)
+--                   pure ()
 client_new uri = do
-                  connection_handle <- foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri
-                  pure (MkDBConnection connection_handle)
+  connection_handle <- foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri
+  PutConnection (MkDBConnection connection_handle)
+  printLn("PutConnection")
+  PureIODatabase ()
+
 
 ||| destroys the db client
-||| @db_client the client returned by client_new
 export
-client_destroy : (db_client : DBConnection) -> IO()
-client_destroy (MkDBConnection connection_handle) = foreign FFI_C "mongoc_client_destroy" (Ptr -> IO ()) connection_handle
+client_destroy : IODatabase()
+client_destroy = do
+  connection <- GetConnection
+  foreign FFI_C "mongoc_client_destroy" (Ptr -> IO ()) (handle connection)
+  PureIODatabase ()
 
 ||| sets the mongo driver's error level
 ||| @db_client the database client
 ||| @error_level the error level to set
 export
 client_set_error_api : (db_client : DBConnection) -> (error_level : Int) -> IO ()
-client_set_error_api (MkDBConnection connection_handle) error_level = foreign FFI_C "mongoc_client_set_error_api" (Ptr -> Int -> IO ()) connection_handle error_level
+-- client_set_error_api (MkDBConnection connection_handle) error_level = foreign FFI_C "mongoc_client_set_error_api" (Ptr -> Int -> IO ()) connection_handle error_level
 
 ||| returns a reference to a collection in the database
-||| @db_client the database client
 ||| @db_name the name of the actual database
 ||| @collection_name the name of the collection
 export
-client_get_collection : (db_client : DBConnection) -> (db_name : String) -> (collection_name : String) -> IO DBCollection
-client_get_collection (MkDBConnection connection_handle) db_name collection_name = do
-  collection_handle <- foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) connection_handle db_name collection_name
-  pure (MkDBCollection collection_handle)
+client_get_collection : (db_name : String) -> (collection_name : String) -> IODatabase ()
+client_get_collection db_name collection_name = do
+    conn <- GetConnection
+    coll <- foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) (handle conn) db_name collection_name
+    PutCollection (MkDBCollection coll)
+    PureIODatabase ()
 
-||| inserts a stringified json object into a collection_destroy, return true if successful
-||| @collection a reference to the desired collection
+    -- DBConnectionBindDBCollection GetConnection (\conn =>
+    --   IOBindDBCollection
+    --     (foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) (connection conn) db_name collection_name)
+    --     (\x => PutCollection (MkDBCollection x))
+    --   )
+--    PutCollection (MkDBCollection collection_handle)
+
+--  connection <- GetConnection
+--   pure (connect_handle)
+--  collection_handle <- foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) (connection connection_handle) db_name collection_name
+--  pure (MkDBCollection collection_handle)
+
+||| inserts a stringified json object into a , return true if successful
 ||| @document a valid stringified json object
 export
-collection_insert : (collection : DBCollection) -> (document : String) -> IO (Maybe Bool)
-collection_insert (MkDBCollection collection_handle) document = do
+collection_insert : (document : String) -> IODatabase (Maybe Bool)
+collection_insert document = do
   d <- DB.Mongo.Bson.new_from_json (Just document)
-  result <-  _collection_insert collection_handle d
+  collection <- GetCollection
+  result <-  _collection_insert (handle collection) d
   DB.Mongo.Bson.destroy d
-  pure result
+  PureIODatabase result
 
 ||| queries the collection and returns a reference to a cursor which can be used to retrieve documents
 ||| see: http://mongoc.org/libmongoc/current/mongoc_collection_find_with_opts.html
-||| @collection a reference to the desired collection_destroy
+||| @collection a reference to the desired
 ||| @filter a valid stringified json query object
 ||| @options a valid stringified json options object
 export
@@ -184,10 +295,18 @@ collection_find_and_modify (MkDBCollection collection_handle) query update = do
   pure result
 
 ||| destroys the collection reference
-||| @collection the collection reference
 export
-collection_destroy : (collection : DBCollection) -> IO()
-collection_destroy (MkDBCollection collection_handle) = foreign FFI_C "mongoc_collection_destroy" (Ptr -> IO()) collection_handle
+collection_destroy : IODatabase ()
+collection_destroy = do
+  collection <- GetCollection
+  foreign FFI_C "mongoc_" (Ptr -> IO()) (handle collection)
+  PureIODatabase ()
+
+  -- DBCollectionBind GetCollection
+  --   (\collection =>
+  --      IOBindIODatabase (foreign FFI_C "mongoc_" (Ptr -> IO()) (handle collection))
+  --        (\_ => PureIODatabase ()))
+
 
 ||| destroys the cursor reference
 ||| @cursor the cursor reference
