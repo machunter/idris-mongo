@@ -29,7 +29,7 @@ server_uri = "mongodb://127.0.0.1:27017"
 --   DB.Mongo.collection_destroy collection
 --   DB.Mongo.client_destroy db
 
-nice_path : IODatabase ()
+nice_path : DBState ()
 nice_path = do
     pure (printLn("hello"))
     DB.Mongo.init
@@ -71,19 +71,10 @@ nice_path = do
     DB.Mongo.client_destroy
     -- clean up memory
 
-runSomething : DBConnectionState -> DBCollectionState -> IODatabase () -> IO (DBConnection, DBCollection)
-runSomething conn coll func = ?f_rhs
+runSomething : DBConnection -> DBCollection -> IO ()
+runSomething x y = ?runSomething_rhs
 
 namespace Main
-  main : IO ()
+  main : IO (DBState ())
   main = do
-    -- init library
-    printLn("Starting Nice Path")
-    runSomething (MkDBConnection null) (MkDBCollection null) nice_path
-    printLn("Done Nice Path")
-    -- printLn("Starting Failure Path")
-    -- connection_failure_path
-    -- printLn("Done Failure Path")
-    -- update_flags_test
-    DB.Mongo.cleanup
     printLn("Done")
