@@ -29,18 +29,18 @@ server_uri = "mongodb://127.0.0.1:27017"
 --   DB.Mongo.collection_destroy collection
 --   DB.Mongo.client_destroy db
 
-nice_path : DBState ()
-nice_path = do
-    pure (printLn("hello"))
-    DB.Mongo.init
+-- nice_path : DBState ()
+-- nice_path = do
+--     pure (printLn("hello"))
+--     DB.Mongo.init
     -- connect to db server
-    DB.Mongo.client_new server_uri
+    -- DB.Mongo.client_new server_uri
     -- set the error level
     -- DB.Mongo.client_set_error_api db 2
     -- get a collection handler
-    DB.Mongo.client_get_collection "testdb" "testcoll"
+    -- DB.Mongo.client_get_collection "testdb" "testcoll"
     -- insert 2 records
-    DB.Mongo.collection_insert "{\"name\":\"burc\",\"age\":50}"
+    -- DB.Mongo.collection_insert "{\"name\":\"burc\",\"age\":50}"
     -- DB.Mongo.collection_insert collection "{\"name\":\"burc\",\"age\":35}"
     -- -- get a cursor
     -- cursor <- DB.Mongo.collection_find collection "{\"name\":\"burc\"}" Nothing
@@ -66,15 +66,21 @@ nice_path = do
     -- -- close cursor
     -- DB.Mongo.cursor_destroy cursor2
     -- close collection
-    DB.Mongo.collection_destroy
+    -- DB.Mongo.collection_destroy
     -- close database
-    DB.Mongo.client_destroy
+    -- DB.Mongo.client_destroy
     -- clean up memory
 
-runSomething : DBConnection -> DBCollection -> IO ()
-runSomething x y = ?runSomething_rhs
+runSomething : DBState (IO State)
+runSomething = do
+    DB.Mongo.init
+    DB.Mongo.client_new server_uri
+    DB.Mongo.client_get_collection "testdb" "testcoll"
+    DB.Mongo.collection_insert "{\"name\":\"burc\",\"age\":50}"
+--    pure(x)
 
 namespace Main
-  main : IO (DBState ())
+  main : IO ()
   main = do
+    liftDBStuff (runSomething)
     printLn("Done")
