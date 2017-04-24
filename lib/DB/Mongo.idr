@@ -11,12 +11,12 @@ import Control.Monad.State
 export
 record DBConnection where
   constructor MkDBConnection
-  handle : Ptr
+  connection_handle : IO Ptr
 
 export
 record DBCollection where
   constructor MkDBCollection
-  handle : Ptr
+  collection_handle : IO Ptr
 
 export
 State : Type
@@ -24,36 +24,14 @@ State = (DBConnection, DBCollection)
 
 export
 data DBState : Type -> Type where
-  GetDBState : DBState (IO State)
-  PutDBState : State -> DBState (IO State)
+  GetDBState : DBState State
+  PutDBState : State -> DBState State
   DBStateBind : DBState a -> (a -> DBState b) -> DBState b
-  IOBIndDBState : IO a -> (a -> DBState b) -> DBState b
-  DBStateBindIO : DBState (IO a) -> (a -> DBState b) -> DBState b
   PureDBStuff : ty -> DBState ty
-  PureISDBStuff : () -> DBState (IO State)
-
-export
-liftDBStuff : DBState (IO State) -> IO State
-liftDBStuff (PutDBState x) = pure x
-liftDBStuff (DBStateBind x f) = ?liftDBStuff_rhs_3
-liftDBStuff (IOBIndDBState x f) = do
-  s <- GetDBState
-  s
-liftDBStuff (DBStateBindIO x f) = ?liftDBStuff_rhs_5
-liftDBStuff (PureDBStuff x) = x
-liftDBStuff (PureISDBStuff ()) = pure (MkDBConnection null, MkDBCollection null)
 
 namespace DBStateDo1
   (>>=) : DBState a -> (a -> DBState b) -> DBState b
   (>>=) = DBStateBind
-
-namespace DBStateDo2
-  (>>=) : IO a -> (a -> DBState b) -> DBState b
-  (>>=) = IOBIndDBState
-
-namespace DBStateDo3
-  (>>=) : DBState (IO a) -> (a -> DBState b) -> DBState b
-  (>>=) = DBStateBindIO
 
 mutual
   export
@@ -67,12 +45,24 @@ mutual
     (<*>) f a = do
       f' <- f
       a' <- a
-      PureDBStuff (f' a')
+      pure (f' a')
 
   export
   Monad DBState where
     (>>=) = DBStateBind
 
+export
+liftDBStuff : DBState State -> State
+liftDBStuff (PutDBState x) =  x
+liftDBStuff (PureDBStuff x) = x
+
+liftDBStuff (DBStateBind x f) = do
+  ?someFunc0
+
+_init : DBState State
+_init = do
+      PureDBStuff (foreign FFI_C "_init" (IO ()))
+      PureDBStuff (MkDBConnection (pure null), MkDBCollection (pure null))
 
 _collection_insert : Ptr -> BSON -> IO (Maybe Bool)
 _collection_insert  collection (MkBSON bson_handle) = do
@@ -109,6 +99,15 @@ _collection_update collection (MkBSON selector_handle) (MkBSON update_handle) up
   result <- foreign FFI_C "_collection_update" (Ptr -> Ptr -> Ptr -> Int -> IO Int) collection selector_handle update_handle update_flags
   if (result == 0) then pure Nothing else pure (Just True)
 
+_client_destroy : IO Ptr -> IO Ptr
+_client_destroy client = do
+  map (\c => foreign FFI_C "mongoc_client_destroy" (Ptr -> IO ()) c) client
+  pure null
+
+_client_get_collection: IO Ptr -> String -> String -> IO Ptr
+_client_get_collection client db_name collection_name = do
+  map (\c => foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) c db_name collection_name) client
+
 export
 data DBDoc : Type where
   MkDBDoc: (bson_string: String) -> DBDoc
@@ -138,11 +137,15 @@ export
 Show DBDoc where
   show (MkDBDoc bson_string) = bson_string
 
+
+export
+initState : DBState State
+initState = PureDBStuff (MkDBConnection (pure null), MkDBCollection (pure null))
+
 ||| initializes the mongo driver, must be called before starting
 export
-init : DBState (IO State)
-init = do
-  IOBIndDBState  (foreign FFI_C "mongoc_init" (IO ())) (PureISDBStuff)
+init : DBState State
+init = _init
 
 ||| cleans up the driver, must be called at the end
 export
@@ -154,17 +157,17 @@ cleanup = do
 ||| creates a new client (db connection) which must be destroyed by calling client_destroy
 ||| @uri the mongodb compatible uri of the form mongodb://x.x.x.x:port
 export
-client_new : (uri : String) -> DBState (IO State)
+client_new : (uri : String) -> DBState State
 client_new uri = do
-   connection_handle <- foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri
-   PutDBState ((MkDBConnection connection_handle), (MkDBCollection null))
+  (_, coll) <- GetDBState
+  PutDBState (MkDBConnection (foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri), coll)
 
 ||| destroys the db client
 export
-client_destroy : DBState (IO ())
--- client_destroy = do
---   connection <- GetDBConnection
---   PureDBStuff (foreign FFI_C "mongoc_client_destroy" (Ptr -> IO ()) (handle connection))
+client_destroy : DBState State
+client_destroy = do
+  (connection, _) <- GetDBState
+  PutDBState (MkDBConnection (_client_destroy (connection_handle connection)), MkDBCollection (pure null))
 
 
 
@@ -179,24 +182,23 @@ client_set_error_api : (db_client : DBConnection) -> (error_level : Int) -> IO (
 ||| @db_name the name of the actual database
 ||| @collection_name the name of the collection
 export
-client_get_collection : (db_name : String) -> (collection_name : String) -> DBState (IO State)
-client_get_collection db_name collection_name =
-  DBStateBindIO GetDBState ( \(conn, _) => do
-    coll <- foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) (handle conn) db_name collection_name
-    PutDBState (conn, MkDBCollection coll)
-  )
+client_get_collection : (db_name : String) -> (collection_name : String) -> DBState State
+client_get_collection db_name collection_name = do
+  (connection, _) <- GetDBState
+  let result =  _client_get_collection (connection_handle connection) db_name collection_name
+  PutDBState (connection, MkDBCollection result)
 
 ||| inserts a stringified json object into a , return true if successful
 ||| @document a valid stringified json object
 export
 collection_insert : (document : String) -> DBState (IO State)
-collection_insert document = do
-  d <- DB.Mongo.Bson.new_from_json (Just document)
-  DBStateBindIO GetDBState (\(_, collection) => do
-    result <-  _collection_insert (handle collection) d
-    DB.Mongo.Bson.destroy d
-    PureISDBStuff ()
-  )
+-- collection_insert document = do
+--   d <- DB.Mongo.Bson.new_from_json (Just document)
+--   DBStateBindIO GetDBState (\(_, collection) => do
+--     result <-  _collection_insert (handle collection) d
+--     DB.Mongo.Bson.destroy d
+--     PureISDBStuff ()
+--   )
 
 ||| queries the collection and returns a reference to a cursor which can be used to retrieve documents
 ||| see: http://mongoc.org/libmongoc/current/mongoc_collection_find_with_opts.html
@@ -205,36 +207,36 @@ collection_insert document = do
 ||| @options a valid stringified json options object
 export
 collection_find : (collection : DBCollection) -> (filter : String) -> (options : Maybe String) -> IO DBCursor
-collection_find (MkDBCollection collection_handle) filter options = do
-  filter_bson <- DB.Mongo.Bson.new_from_json (Just filter)
-  opts_bson <- DB.Mongo.Bson.new_from_json options
-  cursor <- _collection_find collection_handle filter_bson opts_bson
-  DB.Mongo.Bson.destroy filter_bson
-  DB.Mongo.Bson.destroy opts_bson
-  pure (MkDBCursor cursor)
+-- collection_find (MkDBCollection collection_handle) filter options = do
+--   filter_bson <- DB.Mongo.Bson.new_from_json (Just filter)
+--   opts_bson <- DB.Mongo.Bson.new_from_json options
+--   cursor <- _collection_find collection_handle filter_bson opts_bson
+--   DB.Mongo.Bson.destroy filter_bson
+--   DB.Mongo.Bson.destroy opts_bson
+--   pure (MkDBCursor cursor)
 
 ||| iterates through a cursor and returns a Maybe DBDoc
 ||| see http://mongoc.org/libmongoc/current/mongoc_cursor_next.html
 ||| @cursor the cursor
 export
 cursor_next : (cursor : DBCursor) -> IO (Maybe DBDoc)
-cursor_next (MkDBCursor cursor_handle) = do
-  Just value  <- _cursor_next cursor_handle | pure Nothing
-  next <- DB.Mongo.Bson.as_json value
-  let result = (Just (MkDBDoc next))
-  DB.Mongo.Bson.destroy value
-  pure result
+-- cursor_next (MkDBCursor cursor_handle) = do
+--   Just value  <- _cursor_next cursor_handle | pure Nothing
+--   next <- DB.Mongo.Bson.as_json value
+--   let result = (Just (MkDBDoc next))
+--   DB.Mongo.Bson.destroy value
+--   pure result
 
 ||| removes documents matching the query, returns true if deletion occured
 ||| @collection the collection to query
 ||| @selector a valid stringified json query
 export
 collection_remove : (collection : DBCollection) -> (selector : String) -> IO (Maybe Bool)
-collection_remove (MkDBCollection collection_handle) selector = do
-  bson_selector <- DB.Mongo.Bson.new_from_json (Just selector)
-  result <- _collection_remove collection_handle bson_selector
-  DB.Mongo.Bson.destroy bson_selector
-  pure result
+-- collection_remove (MkDBCollection collection_handle) selector = do
+--   bson_selector <- DB.Mongo.Bson.new_from_json (Just selector)
+--   result <- _collection_remove collection_handle bson_selector
+--   DB.Mongo.Bson.destroy bson_selector
+--   pure result
 
 ||| update the first document matching the query
 ||| @collection the collection to search
@@ -242,13 +244,13 @@ collection_remove (MkDBCollection collection_handle) selector = do
 ||| @update the update stringified json object
 export
 collection_find_and_modify : (collection : DBCollection) -> (query : String) -> (update : String) -> IO (Maybe Bool)
-collection_find_and_modify (MkDBCollection collection_handle) query update = do
-  query_bson <- DB.Mongo.Bson.new_from_json (Just query)
-  update_bson <- DB.Mongo.Bson.new_from_json (Just update)
-  result <- _collection_find_and_modify collection_handle query_bson update_bson
-  DB.Mongo.Bson.destroy query_bson
-  DB.Mongo.Bson.destroy update_bson
-  pure result
+-- collection_find_and_modify (MkDBCollection collection_handle) query update = do
+--   query_bson <- DB.Mongo.Bson.new_from_json (Just query)
+--   update_bson <- DB.Mongo.Bson.new_from_json (Just update)
+--   result <- _collection_find_and_modify collection_handle query_bson update_bson
+--   DB.Mongo.Bson.destroy query_bson
+--   DB.Mongo.Bson.destroy update_bson
+--   pure result
 
 ||| destroys the collection reference
 export
@@ -267,14 +269,14 @@ collection_destroy : DBState ()
 ||| @cursor the cursor reference
 export
 cursor_destroy : (cursor : DBCursor) -> IO ()
-cursor_destroy (MkDBCursor cursor_handle) = foreign FFI_C "mongoc_cursor_destroy" (Ptr -> IO()) cursor_handle
+-- cursor_destroy (MkDBCursor cursor_handle) = foreign FFI_C "mongoc_cursor_destroy" (Ptr -> IO()) cursor_handle
 
 export
 collection_update : (collection : DBCollection) -> (selector: String) -> (update : String) -> (flags : DBUpdateFlags) -> IO (Maybe Bool)
-collection_update (MkDBCollection collection_handle) selector update flags = do
-  selector_bson <- DB.Mongo.Bson.new_from_json (Just selector)
-  update_bson <- DB.Mongo.Bson.new_from_json (Just update)
-  result <- _collection_update collection_handle selector_bson update_bson flags
-  DB.Mongo.Bson.destroy selector_bson
-  DB.Mongo.Bson.destroy update_bson
-  pure result
+-- collection_update (MkDBCollection collection_handle) selector update flags = do
+--   selector_bson <- DB.Mongo.Bson.new_from_json (Just selector)
+--   update_bson <- DB.Mongo.Bson.new_from_json (Just update)
+--   result <- _collection_update collection_handle selector_bson update_bson flags
+--   DB.Mongo.Bson.destroy selector_bson
+--   DB.Mongo.Bson.destroy update_bson
+--   pure result

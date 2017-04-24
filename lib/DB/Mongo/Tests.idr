@@ -71,16 +71,17 @@ server_uri = "mongodb://127.0.0.1:27017"
     -- DB.Mongo.client_destroy
     -- clean up memory
 
-runSomething : DBState (IO State)
-runSomething = do
+runSomething : String -> DBState State
+runSomething uri = do
     DB.Mongo.init
-    DB.Mongo.client_new server_uri
+    DB.Mongo.client_new uri
     DB.Mongo.client_get_collection "testdb" "testcoll"
     DB.Mongo.collection_insert "{\"name\":\"burc\",\"age\":50}"
---    pure(x)
 
 namespace Main
   main : IO ()
-  main = do
-    liftDBStuff (runSomething)
-    printLn("Done")
+  main =
+    let x = (runSomething server_uri)() in
+      do
+        pure (x)
+        printLn("done")

@@ -91,3 +91,8 @@ bson_t * _cursor_next(mongoc_cursor_t* cursor) {
     return NULL;
   }
 }
+
+void _init() {
+  printf("init\n");
+  mongoc_init ();
+}
