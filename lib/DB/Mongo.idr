@@ -18,29 +18,29 @@ record DBCollection where
   constructor MkDBCollection
   collection_handle : IO Ptr
 
-export
+public export
 State : Type
 State = (DBConnection, DBCollection)
 
-export
-data DBState : Type -> Type where
-  GetDBState : DBState State
-  PutDBState : State -> DBState State
-  DBStateBind : DBState a -> (a -> DBState b) -> DBState b
-  PureDBStuff : ty -> DBState ty
+public export
+data DBState : (stateType : Type) -> (ty : Type ) -> Type where
+  GetDBState : DBState stateType stateType
+  PutDBState : stateType -> DBState stateType (IO())
+  DBStateBind : DBState stateType a -> (a -> DBState stateType b) -> DBState stateType b
+  PureDBStuff : ty -> DBState stateType ty
 
-namespace DBStateDo1
-  (>>=) : DBState a -> (a -> DBState b) -> DBState b
+namespace DBStateDoBind
+  (>>=) : DBState stateType a -> (a -> DBState stateType b) -> DBState stateType b
   (>>=) = DBStateBind
 
 mutual
   export
-  Functor DBState where
+  Functor (DBState stateType) where
     map func x = do
       val <- x
       PureDBStuff (func val)
   export
-  Applicative DBState where
+  Applicative (DBState stateType) where
     pure = PureDBStuff
     (<*>) f a = do
       f' <- f
@@ -48,26 +48,25 @@ mutual
       pure (f' a')
 
   export
-  Monad DBState where
+  Monad (DBState stateType) where
     (>>=) = DBStateBind
 
 export
-liftDBStuff : DBState State -> State
-liftDBStuff (PutDBState x) =  x
-liftDBStuff (PureDBStuff x) = x
+_init2 : IO ()
+_init2 = foreign FFI_C "_init" (IO ())
 
-liftDBStuff (DBStateBind x f) = do
-  ?someFunc0
-
-_init : DBState State
+_init : DBState State (IO())
 _init = do
-      PureDBStuff (foreign FFI_C "_init" (IO ()))
-      PureDBStuff (MkDBConnection (pure null), MkDBCollection (pure null))
+      PutDBState (MkDBConnection (foreign FFI_C "_init" (IO Ptr)), MkDBCollection (pure null))
 
-_collection_insert : Ptr -> BSON -> IO (Maybe Bool)
-_collection_insert  collection (MkBSON bson_handle) = do
-    result <- foreign FFI_C "_collection_insert" (Ptr -> Ptr -> IO Int) collection bson_handle
-    if (result == 0) then pure Nothing else pure (Just True)
+_collection_insert : IO Ptr -> IO BSON -> IO (Maybe Bool)
+_collection_insert  collection bson  = do
+    my_byson <- bson
+    case my_byson of
+      MkBSON bson_handle  => do
+        result <- map (\c => foreign FFI_C "_collection_insert" (Ptr -> Ptr -> IO Int) c bson_handle) collection
+        res <- result
+        if (res == 0) then pure Nothing else pure (Just True)
 
 _write_concern_new : IO Ptr
 _write_concern_new = foreign FFI_C "mongoc_write_concern_new" (IO Ptr)
@@ -106,7 +105,8 @@ _client_destroy client = do
 
 _client_get_collection: IO Ptr -> String -> String -> IO Ptr
 _client_get_collection client db_name collection_name = do
-  map (\c => foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) c db_name collection_name) client
+  result <- map (\c => foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) c db_name collection_name) client
+  result
 
 export
 data DBDoc : Type where
@@ -139,17 +139,18 @@ Show DBDoc where
 
 
 export
-initState : DBState State
-initState = PureDBStuff (MkDBConnection (pure null), MkDBCollection (pure null))
+initState : DBState State (IO())
+initState = do
+  PutDBState (MkDBConnection (pure null), MkDBCollection (pure null))
 
 ||| initializes the mongo driver, must be called before starting
 export
-init : DBState State
+init : DBState State (IO())
 init = _init
 
 ||| cleans up the driver, must be called at the end
 export
-cleanup : IO (DBState ())
+cleanup : IO (DBState State ())
 cleanup = do
   foreign FFI_C "mongoc_cleanup" (IO ())
   pure (PureDBStuff ())
@@ -157,14 +158,13 @@ cleanup = do
 ||| creates a new client (db connection) which must be destroyed by calling client_destroy
 ||| @uri the mongodb compatible uri of the form mongodb://x.x.x.x:port
 export
-client_new : (uri : String) -> DBState State
+client_new : (uri : String) -> DBState State (IO())
 client_new uri = do
-  (_, coll) <- GetDBState
-  PutDBState (MkDBConnection (foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri), coll)
+  PutDBState (MkDBConnection (foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri), MkDBCollection (pure null))
 
 ||| destroys the db client
 export
-client_destroy : DBState State
+client_destroy : DBState State (IO())
 client_destroy = do
   (connection, _) <- GetDBState
   PutDBState (MkDBConnection (_client_destroy (connection_handle connection)), MkDBCollection (pure null))
@@ -182,7 +182,7 @@ client_set_error_api : (db_client : DBConnection) -> (error_level : Int) -> IO (
 ||| @db_name the name of the actual database
 ||| @collection_name the name of the collection
 export
-client_get_collection : (db_name : String) -> (collection_name : String) -> DBState State
+client_get_collection : (db_name : String) -> (collection_name : String) -> DBState State (IO())
 client_get_collection db_name collection_name = do
   (connection, _) <- GetDBState
   let result =  _client_get_collection (connection_handle connection) db_name collection_name
@@ -191,8 +191,13 @@ client_get_collection db_name collection_name = do
 ||| inserts a stringified json object into a , return true if successful
 ||| @document a valid stringified json object
 export
-collection_insert : (document : String) -> DBState (IO State)
--- collection_insert document = do
+collection_insert : (document : String) -> DBState State (IO())
+collection_insert document = do
+  (connection, collection) <- GetDBState
+  let d = DB.Mongo.Bson.new_from_json (Just document)
+  let result = _collection_insert (collection_handle collection) d
+  PutDBState (connection, collection)
+
 --   d <- DB.Mongo.Bson.new_from_json (Just document)
 --   DBStateBindIO GetDBState (\(_, collection) => do
 --     result <-  _collection_insert (handle collection) d
@@ -254,7 +259,7 @@ collection_find_and_modify : (collection : DBCollection) -> (query : String) -> 
 
 ||| destroys the collection reference
 export
-collection_destroy : DBState ()
+collection_destroy : DBState State ()
 -- collection_destroy = do
 --   collection <- GetDBCollection
 --   foreign FFI_C "mongoc_" (Ptr -> IO()) (handle collection)

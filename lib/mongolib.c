@@ -92,7 +92,8 @@ bson_t * _cursor_next(mongoc_cursor_t* cursor) {
   }
 }
 
-void _init() {
-  printf("init\n");
-  mongoc_init ();
+bson_t* _init(void) {
+  printf ("%s \n", "A string");
+  mongoc_init();
+  return NULL;
 }

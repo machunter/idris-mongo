@@ -18,7 +18,6 @@ data BSON : Type where
 
 
 
-
 ||| creates a bson object from a json string
 ||| @json_string the stringified JSON string
 export

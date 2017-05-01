@@ -71,17 +71,23 @@ server_uri = "mongodb://127.0.0.1:27017"
     -- DB.Mongo.client_destroy
     -- clean up memory
 
-runSomething : String -> DBState State
-runSomething uri = do
+
+
+runSomething : DBState stateType a -> (st: stateType) -> (a, stateType)
+runSomething GetDBState state = (state, state)
+runSomething (PutDBState newState) st = ( pure(), newState)
+runSomething (DBStateBind cmd prog) state = let (val, nextState) = runSomething cmd state in runSomething (prog val) nextState
+runSomething (PureDBStuff newState) state = (newState, state)
+
+myProgram : DBState State (IO())
+myProgram = do
     DB.Mongo.init
-    DB.Mongo.client_new uri
+    DB.Mongo.client_new server_uri
     DB.Mongo.client_get_collection "testdb" "testcoll"
     DB.Mongo.collection_insert "{\"name\":\"burc\",\"age\":50}"
 
 namespace Main
   main : IO ()
-  main =
-    let x = (runSomething server_uri)() in
-      do
-        pure (x)
-        printLn("done")
+  main = do
+    Prelude.Basics.fst (runSomething DB.Mongo.init (MkDBConnection (pure null), MkDBCollection (pure null)))
+    printLn("done")

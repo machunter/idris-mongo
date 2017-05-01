@@ -18,4 +18,4 @@ mongoc_collection_t * _client_get_collection (mongoc_client_t *client, const cha
 
 bool _collection_update(mongoc_collection_t *collection, const bson_t *selector, const bson_t *update, int update_flags);
 
-void _init();
+bson_t* _init (void);
