@@ -73,21 +73,17 @@ server_uri = "mongodb://127.0.0.1:27017"
 
 
 
-runSomething : DBState stateType a -> (st: stateType) -> (a, stateType)
-runSomething GetDBState state = (state, state)
-runSomething (PutDBState newState) st = ( pure(), newState)
-runSomething (DBStateBind cmd prog) state = let (val, nextState) = runSomething cmd state in runSomething (prog val) nextState
-runSomething (PureDBStuff newState) state = (newState, state)
 
 myProgram : DBState State (IO())
 myProgram = do
-    DB.Mongo.init
-    DB.Mongo.client_new server_uri
-    DB.Mongo.client_get_collection "testdb" "testcoll"
-    DB.Mongo.collection_insert "{\"name\":\"burc\",\"age\":50}"
+    init
+    client_new server_uri
+    client_get_collection "testdb" "testcoll"
+    collection_insert "{\"name\":\"burc\",\"age\":50}"
 
 namespace Main
   main : IO ()
   main = do
-    Prelude.Basics.fst (runSomething DB.Mongo.init (MkDBConnection (pure null), MkDBCollection (pure null)))
-    printLn("done")
+    let x = Prelude.Basics.snd (run init initialState)
+    printLn(showState x)
+    print("done")

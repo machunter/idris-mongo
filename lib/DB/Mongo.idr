@@ -20,13 +20,14 @@ record DBCollection where
 
 public export
 State : Type
-State = (DBConnection, DBCollection)
+State = (String, DBConnection, DBCollection)
 
 public export
 data DBState : (stateType : Type) -> (ty : Type ) -> Type where
   GetDBState : DBState stateType stateType
   PutDBState : stateType -> DBState stateType (IO())
   DBStateBind : DBState stateType a -> (a -> DBState stateType b) -> DBState stateType b
+  DBIOBindState : IO a -> (a -> DBState stateType b) -> DBState stateType b
   PureDBStuff : ty -> DBState stateType ty
 
 namespace DBStateDoBind
@@ -39,6 +40,7 @@ mutual
     map func x = do
       val <- x
       PureDBStuff (func val)
+
   export
   Applicative (DBState stateType) where
     pure = PureDBStuff
@@ -47,17 +49,33 @@ mutual
       a' <- a
       pure (f' a')
 
+
+
   export
   Monad (DBState stateType) where
     (>>=) = DBStateBind
 
 export
-_init2 : IO ()
-_init2 = foreign FFI_C "_init" (IO ())
+run : DBState stateType a -> (st: stateType) -> (a, stateType)
+run GetDBState state = (state, state)
+run (PutDBState newState) st = ( pure(), newState)
+run (DBStateBind cmd prog) state = let (val, nextState) = run cmd state in run (prog val) nextState
+run (DBIOBindState cmd prog) state = ?someFunction
+run (PureDBStuff newState) state = (newState, state)
+
+
+export
+initialState : State
+initialState = ("IntialState", MkDBConnection (pure null), MkDBCollection (pure null))
+
+export
+theX : IO Ptr
+theX =  foreign FFI_C "_init" (IO Ptr)
 
 _init : DBState State (IO())
-_init = do
-      PutDBState (MkDBConnection (foreign FFI_C "_init" (IO Ptr)), MkDBCollection (pure null))
+_init =
+  DBIOBindState (foreign FFI_C "_init" (IO Ptr)) (\_ => PureDBStuff (pure ()))
+
 
 _collection_insert : IO Ptr -> IO BSON -> IO (Maybe Bool)
 _collection_insert  collection bson  = do
@@ -137,11 +155,14 @@ export
 Show DBDoc where
   show (MkDBDoc bson_string) = bson_string
 
+export
+showState : State -> String
+showState (a, b) = a
+
 
 export
 initState : DBState State (IO())
-initState = do
-  PutDBState (MkDBConnection (pure null), MkDBCollection (pure null))
+initState = PutDBState initialState
 
 ||| initializes the mongo driver, must be called before starting
 export
@@ -160,14 +181,15 @@ cleanup = do
 export
 client_new : (uri : String) -> DBState State (IO())
 client_new uri = do
-  PutDBState (MkDBConnection (foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri), MkDBCollection (pure null))
+  (last_state, _, _) <- GetDBState
+  PutDBState (last_state ++ ">> client_new", MkDBConnection (foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri), MkDBCollection (pure null))
 
 ||| destroys the db client
 export
 client_destroy : DBState State (IO())
 client_destroy = do
-  (connection, _) <- GetDBState
-  PutDBState (MkDBConnection (_client_destroy (connection_handle connection)), MkDBCollection (pure null))
+  (last_state, connection, _) <- GetDBState
+  PutDBState (last_state ++ ">> client_destroy", MkDBConnection (_client_destroy (connection_handle connection)), MkDBCollection (pure null))
 
 
 
@@ -184,19 +206,19 @@ client_set_error_api : (db_client : DBConnection) -> (error_level : Int) -> IO (
 export
 client_get_collection : (db_name : String) -> (collection_name : String) -> DBState State (IO())
 client_get_collection db_name collection_name = do
-  (connection, _) <- GetDBState
+  (last_state, connection, _) <- GetDBState
   let result =  _client_get_collection (connection_handle connection) db_name collection_name
-  PutDBState (connection, MkDBCollection result)
+  PutDBState (last_state ++ ">> client_get_collection", connection, MkDBCollection result)
 
 ||| inserts a stringified json object into a , return true if successful
 ||| @document a valid stringified json object
 export
 collection_insert : (document : String) -> DBState State (IO())
 collection_insert document = do
-  (connection, collection) <- GetDBState
+  (last_state, connection, collection) <- GetDBState
   let d = DB.Mongo.Bson.new_from_json (Just document)
   let result = _collection_insert (collection_handle collection) d
-  PutDBState (connection, collection)
+  PutDBState (last_state ++ ">> collection_insert", connection, collection)
 
 --   d <- DB.Mongo.Bson.new_from_json (Just document)
 --   DBStateBindIO GetDBState (\(_, collection) => do
