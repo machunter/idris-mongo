@@ -27,12 +27,16 @@ data DBState : (stateType : Type) -> (ty : Type ) -> Type where
   GetDBState : DBState stateType stateType
   PutDBState : stateType -> DBState stateType (IO())
   DBStateBind : DBState stateType a -> (a -> DBState stateType b) -> DBState stateType b
-  DBIOBindState : IO a -> (a -> DBState stateType b) -> DBState stateType b
+  DBIOBindState : IO a -> (IO a -> DBState stateType (IO b)) -> DBState stateType (IO b)
   PureDBStuff : ty -> DBState stateType ty
 
 namespace DBStateDoBind
   (>>=) : DBState stateType a -> (a -> DBState stateType b) -> DBState stateType b
   (>>=) = DBStateBind
+
+namespace DBIOBindStateDo
+  (>>=) : IO a -> (IO a -> DBState stateType (IO b)) -> DBState stateType (IO b)
+  (>>=) = DBIOBindState
 
 mutual
   export
@@ -60,7 +64,7 @@ run : DBState stateType a -> (st: stateType) -> (a, stateType)
 run GetDBState state = (state, state)
 run (PutDBState newState) st = ( pure(), newState)
 run (DBStateBind cmd prog) state = let (val, nextState) = run cmd state in run (prog val) nextState
-run (DBIOBindState cmd prog) state = ?someFunction
+run (DBIOBindState cmd prog) state = let (val, nextState) =  (cmd, state) in run (prog val) nextState
 run (PureDBStuff newState) state = (newState, state)
 
 
@@ -73,8 +77,11 @@ theX : IO Ptr
 theX =  foreign FFI_C "_init" (IO Ptr)
 
 _init : DBState State (IO())
-_init =
-  DBIOBindState (foreign FFI_C "_init" (IO Ptr)) (\_ => PureDBStuff (pure ()))
+_init = do
+  DBStateBind GetDBState (\(last_state, conn, coll) =>
+    DBIOBindState (foreign FFI_C "_init" (IO Ptr)) (\_ => PutDBState ("_init >> " ++ last_state, conn, coll))
+  )
+
 
 
 _collection_insert : IO Ptr -> IO BSON -> IO (Maybe Bool)
