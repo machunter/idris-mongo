@@ -27,16 +27,11 @@ data DBState : (stateType : Type) -> (ty : Type ) -> Type where
   GetDBState : DBState stateType stateType
   PutDBState : stateType -> DBState stateType (IO())
   DBStateBind : DBState stateType a -> (a -> DBState stateType b) -> DBState stateType b
-  DBIOBindState : IO a -> (IO a -> DBState stateType (IO b)) -> DBState stateType (IO b)
   PureDBStuff : ty -> DBState stateType ty
 
 namespace DBStateDoBind
   (>>=) : DBState stateType a -> (a -> DBState stateType b) -> DBState stateType b
   (>>=) = DBStateBind
-
-namespace DBIOBindStateDo
-  (>>=) : IO a -> (IO a -> DBState stateType (IO b)) -> DBState stateType (IO b)
-  (>>=) = DBIOBindState
 
 mutual
   export
@@ -59,12 +54,12 @@ mutual
   Monad (DBState stateType) where
     (>>=) = DBStateBind
 
+
 export
 run : DBState stateType a -> (st: stateType) -> (a, stateType)
 run GetDBState state = (state, state)
 run (PutDBState newState) st = ( pure(), newState)
 run (DBStateBind cmd prog) state = let (val, nextState) = run cmd state in run (prog val) nextState
-run (DBIOBindState cmd prog) state = let (val, nextState) =  (cmd, state) in run (prog val) nextState
 run (PureDBStuff newState) state = (newState, state)
 
 
@@ -78,10 +73,9 @@ theX =  foreign FFI_C "_init" (IO Ptr)
 
 _init : DBState State (IO())
 _init = do
-  DBStateBind GetDBState (\(last_state, conn, coll) =>
-    DBIOBindState (foreign FFI_C "_init" (IO Ptr)) (\_ => PutDBState ("_init >> " ++ last_state, conn, coll))
-  )
-
+  (last_state, conn, coll) <- GetDBState
+  pure (unsafePerformIO (foreign FFI_C "_init" (IO Ptr)))
+  PutDBState ("_init >> " ++ last_state, conn, coll)
 
 
 _collection_insert : IO Ptr -> IO BSON -> IO (Maybe Bool)
@@ -189,7 +183,8 @@ export
 client_new : (uri : String) -> DBState State (IO())
 client_new uri = do
   (last_state, _, _) <- GetDBState
-  PutDBState (last_state ++ ">> client_new", MkDBConnection (foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri), MkDBCollection (pure null))
+
+  PutDBState (last_state ++ ">> client_new", MkDBConnection (pure (unsafePerformIO (foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri))), MkDBCollection (pure null))
 
 ||| destroys the db client
 export
@@ -214,8 +209,7 @@ export
 client_get_collection : (db_name : String) -> (collection_name : String) -> DBState State (IO())
 client_get_collection db_name collection_name = do
   (last_state, connection, _) <- GetDBState
-  let result =  _client_get_collection (connection_handle connection) db_name collection_name
-  PutDBState (last_state ++ ">> client_get_collection", connection, MkDBCollection result)
+  PutDBState (last_state ++ ">> client_get_collection", connection, MkDBCollection (pure (unsafePerformIO (_client_get_collection (connection_handle connection) db_name collection_name))))
 
 ||| inserts a stringified json object into a , return true if successful
 ||| @document a valid stringified json object
@@ -223,8 +217,7 @@ export
 collection_insert : (document : String) -> DBState State (IO())
 collection_insert document = do
   (last_state, connection, collection) <- GetDBState
-  let d = DB.Mongo.Bson.new_from_json (Just document)
-  let result = _collection_insert (collection_handle collection) d
+  (pure (unsafePerformIO (_collection_insert (collection_handle collection) (DB.Mongo.Bson.new_from_json (Just document)))))
   PutDBState (last_state ++ ">> collection_insert", connection, collection)
 
 --   d <- DB.Mongo.Bson.new_from_json (Just document)

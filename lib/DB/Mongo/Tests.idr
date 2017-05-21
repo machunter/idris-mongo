@@ -84,6 +84,6 @@ myProgram = do
 namespace Main
   main : IO ()
   main = do
-    let x = Prelude.Basics.snd (run init initialState)
+    let x = Prelude.Basics.snd (run myProgram initialState)
     printLn(showState x)
     print("done")
