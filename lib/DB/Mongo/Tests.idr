@@ -74,12 +74,13 @@ server_uri = "mongodb://127.0.0.1:27017"
 
 
 
-myProgram : DBState State (IO())
+myProgram : DBState State (IO DBResult)
 myProgram = do
     init
     client_new server_uri
     client_get_collection "testdb" "testcoll"
     collection_insert "{\"name\":\"burc\",\"age\":50}"
+    collection_insert "{\"name\":\"burc\",\"age\":35}"
 
 namespace Main
   main : IO ()
