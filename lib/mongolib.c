@@ -3,6 +3,7 @@
 
 
 int _collection_insert(mongoc_collection_t *collection, const bson_t *document) {
+  printf ("%s \n", "_collection_insert");
   bson_error_t error;
   mongoc_write_concern_t *write_concern = mongoc_write_concern_new ();
   mongoc_write_concern_set_w(write_concern, MONGOC_WRITE_CONCERN_W_DEFAULT);
@@ -18,6 +19,7 @@ int _collection_insert(mongoc_collection_t *collection, const bson_t *document) 
 
 
 bson_t* _bson_new_from_json (char *json_string) {
+  printf ("%s \n", "_bson_new_from_json");
   bson_error_t error;
   bson_t *bson = bson_new_from_json ( (uint8_t *)json_string, strlen(json_string), &error);
   return bson;
@@ -76,7 +78,9 @@ bool _collection_update(mongoc_collection_t *collection, const bson_t *selector,
 
 
 mongoc_collection_t * _client_get_collection (mongoc_client_t *client, const char *db, const char *collection) {
-  mongoc_collection_t * collection_ptr =  mongoc_client_get_collection (client,db,collection);
+  printf ("%s \n", "_client_get_collection");
+
+  mongoc_collection_t * collection_ptr = mongoc_client_get_collection (client,db,collection);
   return collection_ptr;
 }
 
@@ -93,7 +97,7 @@ bson_t * _cursor_next(mongoc_cursor_t* cursor) {
 }
 
 bson_t* _init(void) {
-  printf ("%s \n", "A string");
+  printf ("%s \n", "_init");
   mongoc_init();
   return NULL;
 }

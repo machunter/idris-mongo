@@ -81,6 +81,7 @@ myProgram = do
     client_get_collection "testdb" "testcoll"
     collection_insert "{\"name\":\"burc\",\"age\":50}"
     collection_insert "{\"name\":\"burc\",\"age\":35}"
+    collection_find  "{\"name\":\"burc\"}" Nothing
 
 namespace Main
   main : IO ()
