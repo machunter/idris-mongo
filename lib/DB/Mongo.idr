@@ -23,17 +23,17 @@ State : Type
 State = (String, DBConnection, DBCollection)
 
 public export
-data DBResult = DBNothing | DBPtr Ptr | DBCount Int | DBIO ()
+data DBResult = DBNothing (IO ()) | DBPtr (IO Ptr) | DBCount (IO Int) | DBIO (IO ()) | DBConnectionHandle Ptr | DBCollectionHandle Ptr
 
 public export
-data DBState : (stateType : Type) -> (ty : Type ) -> Type where
+data DBState : (stateType : Type) -> (valueType : Type ) -> Type where
   GetDBState : DBState stateType stateType
-  PutDBState : stateType -> DBState stateType (IO DBResult)
-  DBStateBind : DBState stateType a -> (a -> DBState stateType b) -> DBState stateType b
-  PureDB : ty -> DBState stateType ty
+  PutDBState : stateType -> DBState stateType DBResult
+  DBStateBind : DBState stateType valueTypeA -> (valueTypeA -> DBState stateType valueTypeB) -> DBState stateType valueTypeB
+  PureDB : valueType -> DBState stateType valueType
 
 namespace DBStateDoBind
-  (>>=) : DBState stateType a -> (a -> DBState stateType b) -> DBState stateType b
+  (>>=) : DBState stateType valueTypeA -> (valueTypeA -> DBState stateType valueTypeB) -> DBState stateType valueTypeB
   (>>=) = DBStateBind
 
 mutual
@@ -60,7 +60,7 @@ mutual
 export
 run : DBState stateType a -> (st: stateType) -> (a, stateType)
 run GetDBState state = (state, state)
-run (PutDBState newState) st = (pure(DBIO ()), newState)
+run (PutDBState newState) st = (DBNothing (pure()), newState)
 run (DBStateBind cmd prog) state = let (val, nextState) = run cmd state in run (prog val) nextState
 run (PureDB newState) state = (newState, state)
 
@@ -125,17 +125,15 @@ export
 Show DBDoc where
   show (MkDBDoc bson_string) = bson_string
 
-export
-showState : State -> String
-showState (a, b) = a
 
 
 export
-initState : DBState State (IO DBResult)
-initState = PutDBState (pure(initialState))
+initState : DBState State DBResult
+initState = PutDBState initialState
 
 _init : DBResult
-_init = DBPtr (unsafePerformIO (foreign FFI_C "_init" (IO Ptr)))
+_init = do
+  DBPtr (foreign FFI_C "_init" (IO Ptr))
 
 ||| initializes the mongo driver, must be called before starting
 export
@@ -147,7 +145,7 @@ init = do
 
 
 _cleanup : DBResult
-_cleanup = DBIO ( unsafePerformIO (foreign FFI_C "mongoc_cleanup" (IO ())))
+_cleanup = DBIO (foreign FFI_C "mongoc_cleanup" (IO ()))
 
 ||| cleans up the driver, must be called at the end
 export
@@ -158,7 +156,7 @@ cleanup = do
   PutDBState ("_init >> " ++ last_state, conn, coll)
 
 _client_new : (uri : String) -> DBResult
-_client_new uri = DBPtr (unsafePerformIO (foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri))
+_client_new uri = DBConnectionHandle  (unsafePerformIO (foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri))
 
 ||| creates a new client (db connection) which must be destroyed by calling client_destroy
 ||| @uri the mongodb compatible uri of the form mongodb://x.x.x.x:port
@@ -168,12 +166,12 @@ client_new uri = do
   (last_state, _, _) <- GetDBState
   case _client_new uri of
     DBNothing => PutDBState (last_state, MkDBConnection null, MkDBCollection null)
-    DBPtr connection_ptr => PutDBState (last_state, MkDBConnection connection_ptr, MkDBCollection null)
+    DBConnectionHandle connection_ptr => PutDBState (last_state, MkDBConnection connection_ptr, MkDBCollection null)
 
 
 _client_destroy : (connection : DBConnection) -> DBResult
 _client_destroy (MkDBConnection connection_handle) = do
-  DBIO (unsafePerformIO (foreign FFI_C "mongoc_client_destroy" (Ptr -> IO ()) connection_handle))
+  DBIO (foreign FFI_C "mongoc_client_destroy" (Ptr -> IO ()) connection_handle)
 
 
 ||| destroys the db client
@@ -189,7 +187,7 @@ client_destroy = do
 _client_get_collection : (connection : DBConnection) -> (db_name : String) -> (collection_name: String) -> DBResult
 _client_get_collection (MkDBConnection connection_handle) db_name collection_name =
   let result = unsafePerformIO (foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) connection_handle db_name collection_name)
-  in if result == null then DBIO() else DBPtr result
+  in if result == null then DBIO (pure ()) else DBCollectionHandle result
 
 ||| returns a reference to a collection in the database
 ||| @db_name the name of the actual database
@@ -197,16 +195,18 @@ _client_get_collection (MkDBConnection connection_handle) db_name collection_nam
 export
 client_get_collection : (db_name : String) -> (collection_name : String) -> DBState State DBResult
 client_get_collection db_name collection_name = do
-  (last_state, connection, _) <- GetDBState
-  case _client_get_collection connection db_name collection_name of
-      DBNothing => PutDBState(last_state, connection, MkDBCollection null)
-      DBPtr collection_ptr => PutDBState(last_state ++ ">>client_get_collection", connection, MkDBCollection collection_ptr)
-
+  (last_state, connection, collection) <- GetDBState
+  let res = _client_get_collection connection db_name collection_name
+  case res
+--     c => PutDBState (last_state, connection, MkDBCollection null)
+--    DBCollectionHandle collection_ptr => PutDBState (last_state ++ ">>client_get_collection", connection, (MkDBCollection collection_ptr))
+  PutDBState (last_state, connection, MkDBCollection null)
+  PutDBState (last_state ++ ">>client_get_collection", connection, collection)
 
 _collection_insert : DBCollection -> BSON -> DBResult
 _collection_insert (MkDBCollection collection_handle) (MkBSON bson_document) =
     let result = unsafePerformIO (foreign FFI_C "_collection_insert" (Ptr -> Ptr -> IO Int) collection_handle bson_document) in
-    if result == 0 then DBIO() else DBCount result
+    if result == 0 then DBIO (pure ()) else DBCount (pure result)
 
 ||| inserts a stringified json object into a , return true if successful
 ||| @document a valid stringified json object

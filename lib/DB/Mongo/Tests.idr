@@ -74,18 +74,22 @@ server_uri = "mongodb://127.0.0.1:27017"
 
 
 
-myProgram : DBState State (IO DBResult)
+myProgram : DBState State DBResult
 myProgram = do
     init
     client_new server_uri
     client_get_collection "testdb" "testcoll"
     collection_insert "{\"name\":\"burc\",\"age\":50}"
     collection_insert "{\"name\":\"burc\",\"age\":35}"
-    collection_find  "{\"name\":\"burc\"}" Nothing
+--    collection_find  "{\"name\":\"burc\"}" Nothing
+
+-- run : DBState stateType a -> (st: stateType) -> (a, stateType)
+-- myProgram : DBState State DBResult
+-- initialState : State
 
 namespace Main
   main : IO ()
   main = do
-    let x = Prelude.Basics.snd (run myProgram initialState)
-    printLn(showState x)
+    case Prelude.Basics.fst (run myProgram initialState) of
+      DBNothing x => x
     print("done")
