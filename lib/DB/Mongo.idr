@@ -161,13 +161,11 @@ _client_new uri = DBConnectionHandle  (unsafePerformIO (foreign FFI_C "mongoc_cl
 ||| creates a new client (db connection) which must be destroyed by calling client_destroy
 ||| @uri the mongodb compatible uri of the form mongodb://x.x.x.x:port
 export
-client_new : (uri : String) -> DBState State DBResult
-client_new uri = do
+dbConnect : (uri : String) -> DBState State DBResult
+dbConnect uri = do
   (last_state, _, _) <- GetDBState
   case _client_new uri of
-    DBNothing => PutDBState (last_state, MkDBConnection null, MkDBCollection null)
-    DBConnectionHandle connection_ptr => PutDBState (last_state, MkDBConnection connection_ptr, MkDBCollection null)
-
+    DBConnectionHandle connectionPtr => PutDBState (last_state ++ ">>client_new", (MkDBConnection connectionPtr), (MkDBCollection null))
 
 _client_destroy : (connection : DBConnection) -> DBResult
 _client_destroy (MkDBConnection connection_handle) = do
@@ -189,19 +187,16 @@ _client_get_collection (MkDBConnection connection_handle) db_name collection_nam
   let result = unsafePerformIO (foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) connection_handle db_name collection_name)
   in if result == null then DBIO (pure ()) else DBCollectionHandle result
 
+
 ||| returns a reference to a collection in the database
 ||| @db_name the name of the actual database
 ||| @collection_name the name of the collection
 export
-client_get_collection : (db_name : String) -> (collection_name : String) -> DBState State DBResult
-client_get_collection db_name collection_name = do
-  (last_state, connection, collection) <- GetDBState
-  let res = _client_get_collection connection db_name collection_name
-  case res
---     c => PutDBState (last_state, connection, MkDBCollection null)
---    DBCollectionHandle collection_ptr => PutDBState (last_state ++ ">>client_get_collection", connection, (MkDBCollection collection_ptr))
-  PutDBState (last_state, connection, MkDBCollection null)
-  PutDBState (last_state ++ ">>client_get_collection", connection, collection)
+get_collection : (db_name : String) -> (collection_name : String) -> DBState State DBResult
+get_collection db_name collection_name = do
+  (last_state, connection, _) <- GetDBState
+  case _client_get_collection connection db_name collection_name of
+    (DBCollectionHandle x) => PutDBState (last_state ++ ">> client_get_collection", connection, MkDBCollection x)
 
 _collection_insert : DBCollection -> BSON -> DBResult
 _collection_insert (MkDBCollection collection_handle) (MkBSON bson_document) =
@@ -214,9 +209,9 @@ export
 collection_insert : (document : String) -> DBState State DBResult
 collection_insert document = do
   (last_state, connection, collection) <- GetDBState
-  -- bsonDoc <- new_from_json document
-  pure (_collection_insert collection (new_from_json document))
-  -- destroy bsonDoc
+  let bsonDoc = new_from_json document
+  pure (_collection_insert collection bsonDoc)
+  let _ = destroy bsonDoc
   PutDBState (last_state ++ ">>collection_insert", connection, collection)
 
 ||| queries the collection and returns a reference to a cursor which can be used to retrieve documents

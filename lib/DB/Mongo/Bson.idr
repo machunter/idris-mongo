@@ -20,7 +20,7 @@ record BSON where
 ||| @json_string the stringified JSON string
 export
 new_from_json : (json_string : String) -> BSON
-new_from_json json_string = MkBSON (unsafePerformIO (foreign FFI_C "_bson_new_from_json" (String -> IO Ptr) json_string)) 
+new_from_json json_string = MkBSON (unsafePerformIO (foreign FFI_C "_bson_new_from_json" (String -> IO Ptr) json_string))
 
 
 ||| deletes a bson object
@@ -29,7 +29,7 @@ export
 destroy : (bson : BSON) -> ()
 destroy (MkBSON bson_handle) = if (bson_handle == null)
                       then ()
-                      else unsafePerformIO (foreign FFI_C "bson_destroy" (Ptr -> IO ()) bson_handle)
+                      else unsafePerformIO (foreign FFI_C "_bson_destroy" (Ptr -> IO ()) bson_handle)
 
 ||| allocates a new bson object
 export

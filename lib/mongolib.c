@@ -25,6 +25,11 @@ bson_t* _bson_new_from_json (char *json_string) {
   return bson;
 }
 
+void _bson_destroy(bson_t* bson) {
+  printf ("%s \n", "_bson_destroy");
+  return bson_destroy(bson);
+}
+
 
 mongoc_cursor_t* _collection_find(mongoc_collection_t *collection, const bson_t * filters, const bson_t * opts){
 

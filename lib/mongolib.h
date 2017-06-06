@@ -12,6 +12,8 @@ int _collection_find_and_modify(mongoc_collection_t *collection, const bson_t *q
 
 bson_t* _bson_new_from_json (char *json_string);
 
+void _bson_destroy(bson_t* bson);
+
 bson_t * _cursor_next(mongoc_cursor_t* cursor);
 
 mongoc_collection_t * _client_get_collection (mongoc_client_t *client, const char *db, const char *collection);
