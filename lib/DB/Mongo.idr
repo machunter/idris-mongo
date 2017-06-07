@@ -211,7 +211,7 @@ collection_insert document = do
   (last_state, connection, collection) <- GetDBState
   let bsonDoc = new_from_json document
   pure (_collection_insert collection bsonDoc)
-  let _ = destroy bsonDoc
+  pure (destroy bsonDoc)
   PutDBState (last_state ++ ">>collection_insert", connection, collection)
 
 ||| queries the collection and returns a reference to a cursor which can be used to retrieve documents
@@ -219,18 +219,15 @@ collection_insert document = do
 ||| @filter a valid stringified json query object
 ||| @options a valid stringified json options object
 export
-collection_find : (filter : String) -> (options : Maybe String) -> DBState State (IO DBResult)
--- collection_find (MkDBCollection collection_handle) filter options = do
---   filter_bson <- DB.Mongo.Bson.new_from_json (Just filter)
---   opts_bson <- DB.Mongo.Bson.new_from_json options
---   cursor <- _collection_find collection_handle filter_bson opts_bson
---   DB.Mongo.Bson.destroy filter_bson
---   DB.Mongo.Bson.destroy opts_bson
---   pure (MkDBCursor cursor)
--- collection_find filter options = do
---   (last_state, connection, collection) <- GetDBState
---   pure (_collection_find (collection_handle collection) (DB.Mongo.Bson.new_from_json (Just filter)) (DB.Mongo.Bson.new_from_json options))
-
+collection_find : (filter : String) -> (options : Maybe String) -> DBState State DBResult
+collection_find filter (Just options) = do
+   (last_state, connection, collection) <- GetDBState
+   let filter_bson = new_from_json filter
+   let opts_bson = DB.Mongo.Bson.new_from_json options
+   cursor <- _collection_find collection_handle filter_bson opts_bson
+   pure (destroy filter_bson)
+   pure (destroy opts_bson)
+   PutDBState (last_state ++ ">>collection_find", connection, collection)
 
 ||| sets the mongo driver's error level
 ||| @db_client the database client
