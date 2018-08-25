@@ -81,15 +81,13 @@ myProgram = do
     get_collection "testdb" "testcoll"
     collection_insert "{\"name\":\"burc\",\"age\":50}"
     collection_insert "{\"name\":\"burc\",\"age\":35}"
-    collection_find  "{\"name\":\"burc\"}" Nothing
+    get_collection "testdn" "newcoll"
+    collection_insert "{\"name\":\"bora\",\"age\":22}"
 
--- run : DBState stateType a -> (st: stateType) -> (a, stateType)
--- myProgram : DBState State DBResult
--- initialState : State
 
 namespace Main
   main : IO ()
   main = do
     case Prelude.Basics.fst (run myProgram initialState) of
-      DBNothing x => x
+      DBResultNothing x => x
     print("done")

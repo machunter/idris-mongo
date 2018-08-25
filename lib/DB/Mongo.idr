@@ -8,22 +8,36 @@ import Control.Monad.State
 %link    C "mongolib.o"
 %include C "mongolib.h"
 
-export
-record DBConnection where
-  constructor MkDBConnection
-  connection_handle : Ptr
 
-export
-record DBCollection where
-  constructor MkDBCollection
-  collection_handle : Ptr
 
 public export
-State : Type
-State = (String, DBConnection, DBCollection)
+data DBCollection = Collection Ptr
 
 public export
-data DBResult = DBNothing (IO ()) | DBPtr (IO Ptr) | DBCount (IO Int) | DBIO (IO ()) | DBConnectionHandle Ptr | DBCollectionHandle Ptr
+data DBCursor = Cursor Ptr
+
+public export
+data DBConnection = Connection Ptr
+
+public export
+data DBQuery = Query BSON
+
+public export
+data DBOptions = Options BSON
+
+public export
+data State = CurrentState (String, Maybe DBConnection, Maybe DBCollection, Maybe DBCursor)
+
+public export
+data DBResult =
+  DBResultNothing (IO ()) |
+  DBResultPtr (IO Ptr) |
+  DBResultCount (IO Int) |
+  DBResultIO (IO ()) |
+  DBResultCollection DBCollection |
+  DBResultConnection DBConnection |
+  DBResultCursor DBCursor |
+  DBResultVoid ()
 
 public export
 data DBState : (stateType : Type) -> (valueType : Type ) -> Type where
@@ -51,8 +65,6 @@ mutual
       a' <- a
       pure (f' a')
 
-
-
   export
   Monad (DBState stateType) where
     (>>=) = DBStateBind
@@ -60,13 +72,30 @@ mutual
 export
 run : DBState stateType a -> (st: stateType) -> (a, stateType)
 run GetDBState state = (state, state)
-run (PutDBState newState) st = (DBNothing (pure()), newState)
+run (PutDBState newState) st = (DBResultNothing (pure()), newState)
 run (DBStateBind cmd prog) state = let (val, nextState) = run cmd state in run (prog val) nextState
 run (PureDB newState) state = (newState, state)
 
 export
 initialState : State
-initialState = ("IntialState", MkDBConnection null, MkDBCollection null)
+initialState = CurrentState ("IntialState", Nothing, Nothing, Nothing)
+
+_client_get_collection : (connection : DBConnection) -> (db_name : String) -> (collection_name: String) -> DBResult
+_client_get_collection (Connection connection_handle) db_name collection_name =
+  let result = unsafePerformIO (foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) connection_handle db_name collection_name)
+  in
+    if result == null
+      then DBResultIO (pure ())
+      else DBResultCollection (Collection result)
+
+
+_init : DBResult
+_init = let result = unsafePerformIO(foreign FFI_C "_init" (IO Ptr))
+  in
+    if result == null
+      then DBResultIO (pure ())
+      else DBResultPtr (pure result)
+
 
 _write_concern_new : IO Ptr
 _write_concern_new = foreign FFI_C "mongoc_write_concern_new" (IO Ptr)
@@ -77,48 +106,61 @@ _write_concern_destroy concern_ptr = foreign FFI_C "mongoc_write_concern_destroy
 _collection_remove : Ptr -> BSON -> IO (Maybe Bool)
 _collection_remove collection (MkBSON selector_handle) = do
   result <- foreign FFI_C "_collection_remove" (Ptr -> Ptr -> IO Int) collection selector_handle
-  if (result == 0) then pure Nothing else pure (Just True)
+  if (result == 0)
+    then pure Nothing
+    else pure (Just True)
 
 _collection_find_and_modify : Ptr -> BSON -> BSON -> IO (Maybe Bool)
 _collection_find_and_modify collection (MkBSON query_handle) (MkBSON update_handle) = do
   result <- foreign FFI_C "_collection_find_and_modify" (Ptr -> Ptr -> Ptr -> IO Int) collection query_handle update_handle
-  if (result == 0) then pure Nothing else pure (Just True)
+  if (result == 0)
+    then pure Nothing
+    else pure (Just True)
+
+_collection_find : (collection: DBCollection) -> (filter: DBQuery) -> (options: DBOptions) -> DBResult
+_collection_find (Collection collection) (Query (MkBSON query)) (Options (MkBSON options)) =
+  let result = unsafePerformIO (foreign FFI_C "_collection_find" (Ptr -> Ptr -> Ptr -> IO Ptr) collection query options)
+  in
+    if result == null
+      then DBResultIO (pure ())
+      else DBResultCursor (Cursor result)
 
 
 _cursor_next : Ptr -> IO (Maybe BSON)
 _cursor_next cursor = do
   doc_handle <- foreign FFI_C "_cursor_next" (Ptr -> IO Ptr) cursor
-  if (doc_handle == null) then pure Nothing else pure (Just (MkBSON doc_handle))
+  if (doc_handle == null)
+    then pure Nothing
+    else pure (Just (MkBSON doc_handle))
 
 _collection_update : Ptr -> BSON -> BSON -> Int -> IO (Maybe Bool)
 _collection_update collection (MkBSON selector_handle) (MkBSON update_handle) update_flags = do
   result <- foreign FFI_C "_collection_update" (Ptr -> Ptr -> Ptr -> Int -> IO Int) collection selector_handle update_handle update_flags
-  if (result == 0) then pure Nothing else pure (Just True)
+  if (result == 0)
+    then pure Nothing
+    else pure (Just True)
+
+
 
 
 export
-data DBDoc : Type where
-  MkDBDoc: (bson_string: String) -> DBDoc
+data DBDoc = MkDBDoc String
+
 
 export
-data DBCursor : Type where
-  MkDBCursor : (cursor : Ptr) -> DBCursor
-
-export
-DBUpdateFlags : Type
-DBUpdateFlags = Int
+data DBUpdateFlags = MkDBUpdateFlags Int
 
 export
 MONGOC_UPDATE_NONE : DBUpdateFlags
-MONGOC_UPDATE_NONE = 0
+MONGOC_UPDATE_NONE = MkDBUpdateFlags 0
 
 export
 MONGOC_UPDATE_UPSERT : DBUpdateFlags
-MONGOC_UPDATE_UPSERT = 1
+MONGOC_UPDATE_UPSERT = MkDBUpdateFlags 1
 
 export
 MONGOC_UPDATE_MULTI_UPDATE : DBUpdateFlags
-MONGOC_UPDATE_MULTI_UPDATE = 2
+MONGOC_UPDATE_MULTI_UPDATE = MkDBUpdateFlags 2
 
 
 export
@@ -131,61 +173,54 @@ export
 initState : DBState State DBResult
 initState = PutDBState initialState
 
-_init : DBResult
-_init = do
-  DBPtr (foreign FFI_C "_init" (IO Ptr))
 
 ||| initializes the mongo driver, must be called before starting
 export
 init : DBState State DBResult
 init = do
-    (last_state, conn, coll) <- GetDBState
-    pure _init
-    PutDBState (last_state ++ ">>init", conn, coll)
+    CurrentState (last_state, conn, coll, cursor) <- GetDBState
+    PureDB (_init)
+    PutDBState (CurrentState (last_state ++ ">>init", conn, coll, cursor))
 
 
 _cleanup : DBResult
-_cleanup = DBIO (foreign FFI_C "mongoc_cleanup" (IO ()))
+_cleanup = DBResultIO (foreign FFI_C "mongoc_cleanup" (IO ()))
 
 ||| cleans up the driver, must be called at the end
 export
 cleanup : DBState State DBResult
 cleanup = do
-  (last_state, conn, coll) <- GetDBState
+  CurrentState (last_state, conn, coll, cursor) <- GetDBState
   pure _cleanup
-  PutDBState ("_init >> " ++ last_state, conn, coll)
+  PutDBState (CurrentState ("_init >> " ++ last_state, conn, coll, cursor))
 
 _client_new : (uri : String) -> DBResult
-_client_new uri = DBConnectionHandle  (unsafePerformIO (foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri))
+_client_new uri = DBResultConnection (Connection (unsafePerformIO (foreign FFI_C "mongoc_client_new" (String -> IO Ptr) uri)))
 
 ||| creates a new client (db connection) which must be destroyed by calling client_destroy
 ||| @uri the mongodb compatible uri of the form mongodb://x.x.x.x:port
 export
 dbConnect : (uri : String) -> DBState State DBResult
 dbConnect uri = do
-  (last_state, _, _) <- GetDBState
+  CurrentState (last_state, _, _, _) <- GetDBState
   case _client_new uri of
-    DBConnectionHandle connectionPtr => PutDBState (last_state ++ ">>client_new", (MkDBConnection connectionPtr), (MkDBCollection null))
+    DBResultConnection (Connection connectionPtr) => PutDBState (CurrentState (last_state ++ ">>client_new", Just (Connection connectionPtr), Nothing, Nothing))
 
 _client_destroy : (connection : DBConnection) -> DBResult
-_client_destroy (MkDBConnection connection_handle) = do
-  DBIO (foreign FFI_C "mongoc_client_destroy" (Ptr -> IO ()) connection_handle)
+_client_destroy (Connection connection_handle) = do
+  DBResultIO (foreign FFI_C "mongoc_client_destroy" (Ptr -> IO ()) connection_handle)
 
 
 ||| destroys the db client
 export
 client_destroy : DBState State DBResult
 client_destroy = do
-  (last_state, connection, _) <- GetDBState
+  CurrentState (last_state, (Just connection), _, _) <- GetDBState
   case _client_destroy connection of
-    _ => PutDBState (last_state ++ ">>client_destroy", MkDBConnection null, MkDBCollection null)
+    _ => PutDBState (CurrentState (last_state ++ ">>client_destroy", Nothing, Nothing, Nothing))
 
 
 
-_client_get_collection : (connection : DBConnection) -> (db_name : String) -> (collection_name: String) -> DBResult
-_client_get_collection (MkDBConnection connection_handle) db_name collection_name =
-  let result = unsafePerformIO (foreign FFI_C "_client_get_collection" (Ptr -> String -> String -> IO Ptr) connection_handle db_name collection_name)
-  in if result == null then DBIO (pure ()) else DBCollectionHandle result
 
 
 ||| returns a reference to a collection in the database
@@ -194,25 +229,25 @@ _client_get_collection (MkDBConnection connection_handle) db_name collection_nam
 export
 get_collection : (db_name : String) -> (collection_name : String) -> DBState State DBResult
 get_collection db_name collection_name = do
-  (last_state, connection, _) <- GetDBState
+  CurrentState (last_state, (Just connection), _, _) <- GetDBState
   case _client_get_collection connection db_name collection_name of
-    (DBCollectionHandle x) => PutDBState (last_state ++ ">> client_get_collection", connection, MkDBCollection x)
+    (DBResultCollection x) => PutDBState (CurrentState (last_state ++ ">> client_get_collection", (Just connection), Just x, Nothing))
 
 _collection_insert : DBCollection -> BSON -> DBResult
-_collection_insert (MkDBCollection collection_handle) (MkBSON bson_document) =
+_collection_insert (Collection collection_handle) (MkBSON bson_document) =
     let result = unsafePerformIO (foreign FFI_C "_collection_insert" (Ptr -> Ptr -> IO Int) collection_handle bson_document) in
-    if result == 0 then DBIO (pure ()) else DBCount (pure result)
+    if result == 0 then DBResultIO (pure ()) else DBResultCount (pure result)
 
 ||| inserts a stringified json object into a , return true if successful
 ||| @document a valid stringified json object
 export
 collection_insert : (document : String) -> DBState State DBResult
 collection_insert document = do
-  (last_state, connection, collection) <- GetDBState
+  CurrentState (last_state, (Just connection), (Just collection), _) <- GetDBState
   let bsonDoc = new_from_json document
   pure (_collection_insert collection bsonDoc)
   pure (destroy bsonDoc)
-  PutDBState (last_state ++ ">>collection_insert", connection, collection)
+  PutDBState (CurrentState (last_state ++ ">>collection_insert", (Just connection),(Just collection), Nothing))
 
 ||| queries the collection and returns a reference to a cursor which can be used to retrieve documents
 ||| see: http://mongoc.org/libmongoc/current/mongoc_collection_find_with_opts.html
@@ -221,13 +256,15 @@ collection_insert document = do
 export
 collection_find : (filter : String) -> (options : Maybe String) -> DBState State DBResult
 collection_find filter (Just options) = do
-   (last_state, connection, collection) <- GetDBState
+   CurrentState (last_state, (Just connection), (Just collection), _) <- GetDBState
    let filter_bson = new_from_json filter
    let opts_bson = DB.Mongo.Bson.new_from_json options
-   cursor <- _collection_find collection_handle filter_bson opts_bson
+   let (DBResultCursor dbCursor) = _collection_find collection (Query filter_bson) (Options opts_bson)
    pure (destroy filter_bson)
    pure (destroy opts_bson)
-   PutDBState (last_state ++ ">>collection_find", connection, collection)
+   PutDBState (CurrentState(last_state ++ ">>collection_find", (Just connection), (Just collection), (Just dbCursor)))
+
+
 
 ||| sets the mongo driver's error level
 ||| @db_client the database client

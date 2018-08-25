@@ -4,3 +4,4 @@
 *.ibc
 *.
 mongolib_test
+mongo-c-driver-*
