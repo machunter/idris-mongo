@@ -1,6 +1,7 @@
 module DB.Mongo.Tests
 import DB.Mongo
 import DB.Mongo.Bson
+import DB.Mongo.Definitions
 
 server_uri : String
 server_uri = "mongodb://127.0.0.1:27017"
@@ -88,6 +89,5 @@ myProgram = do
 namespace Main
   main : IO ()
   main = do
-    case Prelude.Basics.fst (run myProgram initialState) of
-      DBResultNothing x => x
-    print("done")
+    case (run myProgram initialState) of
+      (DBResultIO x,CurrentState (p, _, _, _)) => print(p)
