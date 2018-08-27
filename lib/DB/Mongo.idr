@@ -1,6 +1,6 @@
 module DB.Mongo
 import CFFI
-import DB.Mongo.CImports
+import DB.Mongo.CImports as Imports
 import Control.Monad.State
 import DB.Mongo.Bson
 import DB.Mongo.Definitions
@@ -56,7 +56,7 @@ export
 init : DBState State DBResult
 init = do
     CurrentState (last_state, conn, coll, cursor) <- GetDBState
-    PureDBState (_init)
+    PureDBState (Imports.init)
     PutDBState (CurrentState (last_state ++ ">>init", conn, coll, cursor))
 
 
@@ -65,7 +65,7 @@ export
 cleanup : DBState State DBResult
 cleanup = do
   CurrentState (last_state, conn, coll, cursor) <- GetDBState
-  PureDBState (_cleanup)
+  PureDBState (Imports.cleanup)
   PutDBState (CurrentState (last_state ++ ">>cleanup", conn, coll, cursor))
 
 
@@ -75,7 +75,7 @@ export
 dbConnect : (uri : String) -> DBState State DBResult
 dbConnect uri = do
   CurrentState (last_state, _, _, _) <- GetDBState
-  case _client_new uri of
+  case Imports.client_new uri of
     DBResultConnection (Connection connectionPtr) => PutDBState (CurrentState (last_state ++ ">>client_new", Just (Connection connectionPtr), Nothing, Nothing))
 
 
@@ -84,7 +84,7 @@ export
 client_destroy : DBState State DBResult
 client_destroy = do
   CurrentState (last_state, (Just connection), _, _) <- GetDBState
-  case _client_destroy connection of
+  case Imports.client_destroy connection of
     _ => PutDBState (CurrentState (last_state ++ ">>client_destroy", Nothing, Nothing, Nothing))
 
 
@@ -95,7 +95,7 @@ export
 get_collection : (db_name : String) -> (collection_name : String) -> DBState State DBResult
 get_collection db_name collection_name = do
   CurrentState (last_state, (Just connection), _, _) <- GetDBState
-  case _client_get_collection connection db_name collection_name of
+  case Imports.client_get_collection connection db_name collection_name of
     (DBResultCollection x) => PutDBState (CurrentState (last_state ++ ">> client_get_collection", (Just connection), Just x, Nothing))
 
 
@@ -106,9 +106,9 @@ collection_insert : (document : String) -> DBState State DBResult
 collection_insert document = do
   CurrentState (last_state, (Just connection), (Just collection), _) <- GetDBState
   let bsonDoc = new_from_json document
-  pure (_collection_insert collection bsonDoc)
+  pure (Imports.collection_insert collection bsonDoc)
   pure (destroy bsonDoc)
-  PutDBState (CurrentState (last_state ++ ">>collection_insert", (Just connection),(Just collection), Nothing))
+  PutDBState (CurrentState (last_state ++ "\n\r >>collection_insert", (Just connection),(Just collection), Nothing))
 
 
 ||| queries the collection and returns a reference to a cursor which can be used to retrieve documents
@@ -117,22 +117,26 @@ collection_insert document = do
 ||| @options a valid stringified json options object
 export
 collection_find : (filter : String) -> (options : Maybe String) -> DBState State DBResult
-collection_find filter (Just options) = do
+collection_find filter options = do
    CurrentState (last_state, (Just connection), (Just collection), _) <- GetDBState
    let filter_bson = new_from_json filter
-   let opts_bson = DB.Mongo.Bson.new_from_json options
-   let (DBResultCursor dbCursor) = _collection_find collection (Query filter_bson) (Options opts_bson)
+   let opts_bson = case options of
+     Nothing => new_from_json "{}"
+     Just options_string => new_from_json options_string
+   let (DBResultCursor dbCursor) = Imports.collection_find collection (Query filter_bson) (Options opts_bson)
    pure (destroy filter_bson)
    pure (destroy opts_bson)
-   PutDBState (CurrentState(last_state ++ ">>collection_find", (Just connection), (Just collection), (Just dbCursor)))
+   PutDBState (CurrentState(last_state ++ "\n >>collection_find", (Just connection), (Just collection), (Just dbCursor)))
 
 
 ||| sets the mongo driver's error level
-||| @db_client the database client
 ||| @error_level the error level to set
 export
-client_set_error_api : (db_client : DBConnection) -> (error_level : Int) -> IO ()
--- client_set_error_api (MkDBConnection connection_handle) error_level = foreign FFI_C "mongoc_client_set_error_api" (Ptr -> Int -> IO ()) connection_handle error_level
+client_set_error_api : (error_level : Int) -> DBState State DBResult
+client_set_error_api error_level = do
+  CurrentState (last_state, (Just (Connection connection)), collection, cursor) <- GetDBState
+  let result = Imports.set_error_api connection error_level
+  PutDBState(CurrentState (last_state ++ "\n >>client_set_error_api", (Just (Connection connection)), collection, cursor))
 
 ||| iterates through a cursor and returns a Maybe DBDoc
 ||| see http://mongoc.org/libmongoc/current/mongoc_cursor_next.html

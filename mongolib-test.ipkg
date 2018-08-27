@@ -1,6 +1,6 @@
 package mongolib_test
 sourcedir = lib
-modules = DB.Mongo.Tests
+modules = DB.Mongo.Tests, DB.Mongo, DB.Mongo.Bson, DB.Mongo.CImports, DB.Mongo.Definitions
 makefile = Makefile
 pkgs = contrib
 executable = mongolib_test

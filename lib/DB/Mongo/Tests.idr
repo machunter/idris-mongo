@@ -30,9 +30,15 @@ server_uri = "mongodb://127.0.0.1:27017"
 --   DB.Mongo.collection_destroy collection
 --   DB.Mongo.client_destroy db
 
--- nice_path : DBState ()
--- nice_path = do
---     pure (printLn("hello"))
+nice_path : DBState State DBResult
+nice_path = do
+  init
+  dbConnect server_uri
+  client_set_error_api 2
+  get_collection "testdb" "testcoll"
+  collection_insert "{\"name\":\"burc\",\"age\":50}"
+  collection_insert "{\"name\":\"burc\",\"age\":35}"
+  collection_find  "{\"name\":\"burc\"}" Nothing
 --     DB.Mongo.init
     -- connect to db server
     -- DB.Mongo.client_new server_uri
@@ -76,18 +82,12 @@ server_uri = "mongodb://127.0.0.1:27017"
 
 
 myProgram : DBState State DBResult
-myProgram = do
-    init
-    dbConnect server_uri
-    get_collection "testdb" "testcoll"
-    collection_insert "{\"name\":\"burc\",\"age\":50}"
-    collection_insert "{\"name\":\"burc\",\"age\":35}"
-    get_collection "testdn" "newcoll"
-    collection_insert "{\"name\":\"bora\",\"age\":22}"
+myProgram =
+    nice_path
 
 
 namespace Main
   main : IO ()
   main = do
     case (run myProgram initialState) of
-      (DBResultIO x,CurrentState (p, _, _, _)) => print(p)
+      (DBResultIO _ ,CurrentState (p, _, _, _)) => print(p)
