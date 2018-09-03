@@ -90,13 +90,17 @@ mongoc_collection_t * _client_get_collection (mongoc_client_t *client, const cha
 }
 
 bson_t * _cursor_next(mongoc_cursor_t* cursor) {
+  printf ("%s \n", "_cursor_next");
+
   bson_t *bson = bson_new();
 
   bool result = mongoc_cursor_next (cursor, (const bson_t **) &bson);
 
   if (result) {
+    printf ("%s \n", "_cursor_next:NOTNULL");
     return bson;
   } else {
+    printf ("%s \n", "_cursor_next:NULL");
     return NULL;
   }
 }

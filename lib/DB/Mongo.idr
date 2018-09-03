@@ -140,16 +140,13 @@ client_set_error_api error_level = do
 
 ||| iterates through a cursor and returns a Maybe DBDoc
 ||| see http://mongoc.org/libmongoc/current/mongoc_cursor_next.html
-||| @cursor the cursor
 export
-cursor_next : (cursor : DBCursor) -> IO (Maybe DBDoc)
--- cursor_next (MkDBCursor cursor_handle) = do
---   Just value  <- _cursor_next cursor_handle | pure Nothing
---   next <- DB.Mongo.Bson.as_json value
---   let result = (Just (MkDBDoc next))
---   DB.Mongo.Bson.destroy value
---   pure result
-
+cursor_next : DBState State DBResult
+cursor_next = do
+  CurrentState (last_state, connection, collection, (Just (Cursor cursor))) <- GetDBState
+  let result = Imports.cursor_next cursor
+  PutDBState(CurrentState (last_state ++ "\n >> cursor_next", connection, collection, (Just (Cursor cursor))))
+  PureDBState result
 
 ||| removes documents matching the query, returns true if deletion occured
 ||| @collection the collection to query

@@ -39,6 +39,8 @@ nice_path = do
   collection_insert "{\"name\":\"burc\",\"age\":50}"
   collection_insert "{\"name\":\"burc\",\"age\":35}"
   collection_find  "{\"name\":\"burc\"}" Nothing
+  let result = cursor_next
+  result
 --     DB.Mongo.init
     -- connect to db server
     -- DB.Mongo.client_new server_uri
@@ -91,3 +93,4 @@ namespace Main
   main = do
     case (run myProgram initialState) of
       (DBResultIO _ ,CurrentState (p, _, _, _)) => print(p)
+    printLn("DONE!")
