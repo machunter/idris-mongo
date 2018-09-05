@@ -39,8 +39,8 @@ nice_path = do
   collection_insert "{\"name\":\"burc\",\"age\":50}"
   collection_insert "{\"name\":\"burc\",\"age\":35}"
   collection_find  "{\"name\":\"burc\"}" Nothing
-  let result = cursor_next
-  result
+  case cursor_next of
+    PureDBState (DBResultBSON (Just result)) => (if ((as_json result) == "{\"name\":\"burc\",\"age\":50}") then PureDBState (DBResultError "Success") else PureDBState (DBResultError "Failed"))
 --     DB.Mongo.init
     -- connect to db server
     -- DB.Mongo.client_new server_uri
@@ -92,5 +92,6 @@ namespace Main
   main : IO ()
   main = do
     case (run myProgram initialState) of
-      (DBResultIO _ ,CurrentState (p, _, _, _)) => print(p)
+      (DBResultVoid ,CurrentState (p, _, _, _)) => print(p)
+      (DBResultError error, CurrentState (_, _, _, _)) => print(error)
     printLn("DONE!")

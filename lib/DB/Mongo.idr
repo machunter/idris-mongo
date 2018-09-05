@@ -39,7 +39,7 @@ mutual
 export
 run : DBState stateType a -> (st: stateType) -> (a, stateType)
 run GetDBState state = (state, state)
-run (PutDBState newState) st = (DBResultIO (pure ()), newState)
+run (PutDBState newState) st = (DBResultVoid, newState)
 run (BindDBState cmd prog) state = let (val, nextState) = run cmd state in run (prog val) nextState
 run (PureDBState newState) state = (newState, state)
 
@@ -144,9 +144,8 @@ export
 cursor_next : DBState State DBResult
 cursor_next = do
   CurrentState (last_state, connection, collection, (Just (Cursor cursor))) <- GetDBState
-  let result = Imports.cursor_next cursor
   PutDBState(CurrentState (last_state ++ "\n >> cursor_next", connection, collection, (Just (Cursor cursor))))
-  PureDBState result
+  PureDBState (Imports.cursor_next cursor)
 
 ||| removes documents matching the query, returns true if deletion occured
 ||| @collection the collection to query

@@ -23,15 +23,15 @@ data State = CurrentState (String, Maybe DBConnection, Maybe DBCollection, Maybe
 
 public export
 data DBResult =
-  DBResultIO (IO ()) |
-  DBResultPtr (IO Ptr) |
-  DBResultCount (IO Int) |
+  DBResultVoid |
+  DBResultPtr Ptr |
+  DBResultCount Int |
   DBResultCollection DBCollection |
   DBResultConnection DBConnection |
   DBResultCursor DBCursor |
   DBResultBool (Maybe bool) |
   DBResultBSON (Maybe BSON) |
-  DBResultError
+  DBResultError String
 
 export
 data DBDoc = MkDBDoc String
