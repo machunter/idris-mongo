@@ -30,6 +30,9 @@ server_uri = "mongodb://127.0.0.1:27017"
 --   DB.Mongo.collection_destroy collection
 --   DB.Mongo.client_destroy db
 
+someFunc: DBState State DBResult -> DBState State DBResult
+
+
 nice_path : DBState State DBResult
 nice_path = do
   init
@@ -39,8 +42,20 @@ nice_path = do
   collection_insert "{\"name\":\"burc\",\"age\":50}"
   collection_insert "{\"name\":\"burc\",\"age\":35}"
   collection_find  "{\"name\":\"burc\"}" Nothing
-  case cursor_next of
-    PureDBState (DBResultBSON (Just result)) => (if ((as_json result) == "{\"name\":\"burc\",\"age\":50}") then PureDBState (DBResultError "Success") else PureDBState (DBResultError "Failed"))
+  PureDBState (DBResultCount 3)
+--  case cursor_next of
+    -- PureDBState DBResultVoid => if (4 == 4) then (PureDBState DBResultVoid) else (PureDBState DBResultVoid)
+    -- PureDBState (DBResultCursor cursor) => if (4 == 4) then (PureDBState DBResultVoid) else (PureDBState DBResultVoid)
+    -- PureDBState (DBResultBSON (Just bson)) => PureDBState (DBResultCount 3)
+    -- PureDBState (DBResultBSON Nothing) => if (4 == 4) then (PureDBState DBResultVoid) else (PureDBState DBResultVoid)
+    -- PureDBState (DBResultPtr p) => (PureDBState (DBResultError "Ptr"))
+    -- PureDBState (DBResultCount x) => (PureDBState (DBResultError "Count"))
+    -- PureDBState (DBResultCollection coll) => (PureDBState (DBResultError "Count"))
+    -- PureDBState (DBResultConnection conn) => (PureDBState (DBResultError "Count"))
+    -- PureDBState (DBResultBool (Just bool)) => (PureDBState (DBResultError "Count"))
+    -- PureDBState (DBResultBool Nothing) => (PureDBState (DBResultError "Count"))
+    -- PureDBState (DBResultError s) => (PureDBState (DBResultError "Count"))
+--  PureDBState (DBResultCount 3)
 --     DB.Mongo.init
     -- connect to db server
     -- DB.Mongo.client_new server_uri
@@ -88,10 +103,18 @@ myProgram =
     nice_path
 
 
+processResult : (DBResult, State) -> IO ()
+processResult (DBResultVoid, CurrentState (p, _, _, _)) = printLn("DBResultVoid")
+processResult (DBResultPtr ptr, CurrentState (p, _, _, _)) = printLn("DBResultPtr")
+processResult (DBResultCount int, CurrentState (p, _, _, _)) = printLn("DBResultCount")
+processResult (DBResultCollection collection, CurrentState (p, _, _, _)) = printLn("DBResultCollection")
+processResult (DBResultConnection connection, CurrentState (p, _, _, _)) = printLn("DBResultConnection")
+processResult (DBResultCursor cursor, CurrentState (p, _, _, _)) = printLn("DBResultCursor")
+processResult (DBResultBool (Just result), CurrentState (p, _, _, _)) = printLn("DBResultBool")
+processResult (DBResultBSON (Just bson), CurrentState (p, _, _, _)) = printLn(as_json bson)
+processResult (DBResultError string, CurrentState (p, _, _, _)) = printLn("DBResultError:" ++ string)
+
 namespace Main
   main : IO ()
   main = do
-    case (run myProgram initialState) of
-      (DBResultVoid ,CurrentState (p, _, _, _)) => print(p)
-      (DBResultError error, CurrentState (_, _, _, _)) => print(error)
-    printLn("DONE!")
+    processResult (run myProgram initialState)

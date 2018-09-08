@@ -8,7 +8,7 @@ import CFFI
 
 
 _as_json : Ptr -> Ptr -> String
-_as_json bson length = unsafePerformIO (foreign FFI_C "bson_as_json" (Ptr -> Ptr -> IO String) bson length)
+_as_json bson length = unsafePerformIO (foreign FFI_C "_bson_as_json" (Ptr -> Ptr -> IO String) bson length)
 
 export
 record BSON where

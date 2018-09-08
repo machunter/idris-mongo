@@ -110,3 +110,8 @@ bson_t* _init(void) {
   mongoc_init();
   return NULL;
 }
+
+char* _bson_as_json(const bson_t *bson, size_t *length) {
+  printf("%s \n", "_bson_as_json");
+  return bson_as_json(bson, length);
+}
