@@ -2,6 +2,10 @@ module DB.Mongo.Tests
 import DB.Mongo
 import DB.Mongo.Bson
 import DB.Mongo.Definitions
+import Language.JSON
+import Language.JSON.Helpers
+
+
 
 server_uri : String
 server_uri = "mongodb://127.0.0.1:27017"
@@ -30,8 +34,6 @@ server_uri = "mongodb://127.0.0.1:27017"
 --   DB.Mongo.collection_destroy collection
 --   DB.Mongo.client_destroy db
 
-someFunc: DBState State DBResult -> DBState State DBResult
-
 
 nice_path : DBState State DBResult
 nice_path = do
@@ -40,60 +42,9 @@ nice_path = do
   client_set_error_api 2
   get_collection "testdb" "testcoll"
   collection_insert "{\"name\":\"burc\",\"age\":50}"
-  collection_insert "{\"name\":\"burc\",\"age\":35}"
-  collection_find  "{\"name\":\"burc\"}" Nothing
-  PureDBState (DBResultCount 3)
---  case cursor_next of
-    -- PureDBState DBResultVoid => if (4 == 4) then (PureDBState DBResultVoid) else (PureDBState DBResultVoid)
-    -- PureDBState (DBResultCursor cursor) => if (4 == 4) then (PureDBState DBResultVoid) else (PureDBState DBResultVoid)
-    -- PureDBState (DBResultBSON (Just bson)) => PureDBState (DBResultCount 3)
-    -- PureDBState (DBResultBSON Nothing) => if (4 == 4) then (PureDBState DBResultVoid) else (PureDBState DBResultVoid)
-    -- PureDBState (DBResultPtr p) => (PureDBState (DBResultError "Ptr"))
-    -- PureDBState (DBResultCount x) => (PureDBState (DBResultError "Count"))
-    -- PureDBState (DBResultCollection coll) => (PureDBState (DBResultError "Count"))
-    -- PureDBState (DBResultConnection conn) => (PureDBState (DBResultError "Count"))
-    -- PureDBState (DBResultBool (Just bool)) => (PureDBState (DBResultError "Count"))
-    -- PureDBState (DBResultBool Nothing) => (PureDBState (DBResultError "Count"))
-    -- PureDBState (DBResultError s) => (PureDBState (DBResultError "Count"))
---  PureDBState (DBResultCount 3)
---     DB.Mongo.init
-    -- connect to db server
-    -- DB.Mongo.client_new server_uri
-    -- set the error level
-    -- DB.Mongo.client_set_error_api db 2
-    -- get a collection handler
-    -- DB.Mongo.client_get_collection "testdb" "testcoll"
-    -- insert 2 records
-    -- DB.Mongo.collection_insert "{\"name\":\"burc\",\"age\":50}"
-    -- DB.Mongo.collection_insert collection "{\"name\":\"burc\",\"age\":35}"
-    -- -- get a cursor
-    -- cursor <- DB.Mongo.collection_find collection "{\"name\":\"burc\"}" Nothing
-    -- -- print the records
-    -- DB.Mongo.cursor_next cursor >>= printLn
-    -- DB.Mongo.cursor_next cursor >>= printLn
-    -- -- no such record
-    -- DB.Mongo.cursor_next cursor >>= printLn
-    -- -- close cursor
-    -- DB.Mongo.cursor_destroy cursor
-    -- -- remove one record
-    -- DB.Mongo.collection_remove collection "{\"name\":\"burc\",\"age\":50}"
-    -- -- update the one record
-    -- update <- DB.Mongo.collection_find_and_modify collection "{\"name\":\"burc\"}" "{\"$set\":{\"age\": 55}}"
-    -- -- get a cursor
-    -- cursor2 <- DB.Mongo.collection_find collection "{\"name\":\"burc\"}" Nothing
-    -- -- should show the updated record
-    -- DB.Mongo.cursor_next cursor2 >>= printLn
-    -- -- no record
-    -- DB.Mongo.cursor_next cursor2 >>= printLn
-    -- -- remove anything with the following
-    -- r <- DB.Mongo.collection_remove collection "{\"name\":\"burc\"}"
-    -- -- close cursor
-    -- DB.Mongo.cursor_destroy cursor2
-    -- close collection
-    -- DB.Mongo.collection_destroy
-    -- close database
-    -- DB.Mongo.client_destroy
-    -- clean up memory
+  collection_insert "{\"name\":\"bora\",\"age\":35}"
+  collection_find  "{\"name\":\"bora\"}" Nothing
+  cursor_next
 
 
 
@@ -104,15 +55,16 @@ myProgram =
 
 
 processResult : (DBResult, State) -> IO ()
-processResult (DBResultVoid, CurrentState (p, _, _, _)) = printLn("DBResultVoid")
+processResult (DBResultError string, CurrentState (p, _, _, _)) = printLn("DBResultError:" ++ string)
+--processResult (DBResultVoid, CurrentState (p, _, _, _)) = printLn("DBResultVoid")
 processResult (DBResultPtr ptr, CurrentState (p, _, _, _)) = printLn("DBResultPtr")
 processResult (DBResultCount int, CurrentState (p, _, _, _)) = printLn("DBResultCount")
 processResult (DBResultCollection collection, CurrentState (p, _, _, _)) = printLn("DBResultCollection")
 processResult (DBResultConnection connection, CurrentState (p, _, _, _)) = printLn("DBResultConnection")
 processResult (DBResultCursor cursor, CurrentState (p, _, _, _)) = printLn("DBResultCursor")
-processResult (DBResultBool (Just result), CurrentState (p, _, _, _)) = printLn("DBResultBool")
-processResult (DBResultBSON (Just bson), CurrentState (p, _, _, _)) = printLn(as_json bson)
-processResult (DBResultError string, CurrentState (p, _, _, _)) = printLn("DBResultError:" ++ string)
+processResult (DBResultBool result, CurrentState (p, _, _, _)) = printLn("DBResultBool")
+processResult (DBResultJSON json, CurrentState (p, _, _, _)) = let (JString result) = value json "name" in
+    if result == "burc" then printLn("Success!") else printLn(result)
 
 namespace Main
   main : IO ()

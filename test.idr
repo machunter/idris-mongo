@@ -1,11 +1,32 @@
-func1 : Int -> Int
-func1 x = 2 * x
+import Language.JSON
+import Language.JSON.Parser
 
-func2 : Int -> Int -> IO ()
-func2 x y = do
-  let z = func1 y
-  print (z + x)
+value : (json: JSON) -> (keyString: String) -> JSON
+value object keyString = valueOf object (split (\x => x == '.') keyString)
+  where
+    valueOf : JSON -> List String -> JSON
+    valueOf json [] = json
+    valueOf json (x :: xs) = valueOf (valueLeaf json x) xs
+      where
+        valueLeaf : JSON -> String -> JSON
+        valueLeaf (JObject xs) key = case filter (\(k,v) => k == key) xs of
+          [] => JNull
+          (k,v)::xs => v
+        valueLeaf _ _ = JNull
+    valueOf _ _ = JNull
+
 
 main: IO ()
 main = do
-  func2 3 2 
+  case parse "{\"name\":{\"first\":\"burc\",\"last\":\"sahinoglu\"},\"age\":50}" of
+    Nothing => printLn("failed")
+    Just json => printLn((value json) "name")
+  case parse "{\"name\":{\"first\":\"burc\",\"last\":\"sahinoglu\"},\"age\":50}" of
+    Nothing => printLn("failed")
+    Just json => printLn((value json) "name.first")
+  case parse "{\"name\":{\"first\":\"burc\",\"last\":\"sahinoglu\"},\"age\":50}" of
+    Nothing => printLn("failed")
+    Just json => printLn((value json) "type")
+  case parse "{\"name\":{\"first\":\"burc\",\"last\":\"sahinoglu\"},\"age\":50}" of
+    Nothing => printLn("failed")
+    Just json => printLn((value json) "")

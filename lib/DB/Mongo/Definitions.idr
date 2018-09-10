@@ -1,5 +1,6 @@
 module DB.Mongo.Definitions
 import DB.Mongo.Bson
+import Language.JSON
 
 public export
 data DBCollection = Collection Ptr
@@ -29,12 +30,9 @@ data DBResult =
   DBResultCollection DBCollection |
   DBResultConnection DBConnection |
   DBResultCursor DBCursor |
-  DBResultBool (Maybe bool) |
-  DBResultBSON (Maybe BSON) |
+  DBResultBool bool |
+  DBResultJSON JSON |
   DBResultError String
-
-export
-data DBDoc = MkDBDoc String
 
 export
 data DBUpdateFlags = MkDBUpdateFlags Int
@@ -50,7 +48,3 @@ MONGOC_UPDATE_UPSERT = MkDBUpdateFlags 1
 export
 MONGOC_UPDATE_MULTI_UPDATE : DBUpdateFlags
 MONGOC_UPDATE_MULTI_UPDATE = MkDBUpdateFlags 2
-
-export
-Show DBDoc where
-  show (MkDBDoc bson_string) = bson_string

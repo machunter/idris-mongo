@@ -138,7 +138,7 @@ client_set_error_api error_level = do
   let result = Imports.set_error_api connection error_level
   PutDBState(CurrentState (last_state ++ "\n >>client_set_error_api", (Just (Connection connection)), collection, cursor))
 
-||| iterates through a cursor and returns a Maybe DBDoc
+||| iterates through a cursor and returns somethig useful
 ||| see http://mongoc.org/libmongoc/current/mongoc_cursor_next.html
 export
 cursor_next : DBState State DBResult

@@ -1,6 +1,8 @@
 module DB.Mongo.CImports
 import DB.Mongo.Bson
 import DB.Mongo.Definitions
+import Language.JSON
+
 
 %lib     C "bson-1.0.0"
 %lib     C "mongoc-1.0.0"
@@ -97,7 +99,9 @@ cursor_next cursor =
   in
     if (doc_handle == null)
       then DBResultVoid
-      else DBResultBSON (Just (MkBSON doc_handle))
+      else case parse (as_json(MkBSON doc_handle)) of
+        Nothing => DBResultError "Couldn't convert result into JSON"
+        Just json => DBResultJSON json
 
 export
 collection_update : Ptr -> BSON -> BSON -> Int -> DBResult
