@@ -17,6 +17,9 @@ data DBQuery = Query BSON
 public export
 data DBOptions = Options BSON
 
+public export
+data DBWriteConcern = WriteConcern Ptr
+
 
 
 public export

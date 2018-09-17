@@ -57,7 +57,7 @@ init : DBState State DBResult
 init = do
     CurrentState (last_state, conn, coll, cursor) <- GetDBState
     PureDBState (Imports.init)
-    PutDBState (CurrentState (last_state ++ ">>init", conn, coll, cursor))
+    PutDBState (CurrentState (last_state ++ " >> init", conn, coll, cursor))
 
 
 ||| cleans up the driver, must be called at the end
@@ -66,7 +66,7 @@ cleanup : DBState State DBResult
 cleanup = do
   CurrentState (last_state, conn, coll, cursor) <- GetDBState
   PureDBState (Imports.cleanup)
-  PutDBState (CurrentState (last_state ++ ">>cleanup", conn, coll, cursor))
+  PutDBState (CurrentState (last_state ++ " >> cleanup", conn, coll, cursor))
 
 
 ||| creates a new client (db connection) which must be destroyed by calling client_destroy
@@ -76,7 +76,7 @@ dbConnect : (uri : String) -> DBState State DBResult
 dbConnect uri = do
   CurrentState (last_state, _, _, _) <- GetDBState
   case Imports.client_new uri of
-    DBResultConnection (Connection connectionPtr) => PutDBState (CurrentState (last_state ++ ">>client_new", Just (Connection connectionPtr), Nothing, Nothing))
+    DBResultConnection (Connection connectionPtr) => PutDBState (CurrentState (last_state ++ " >> client_new", Just (Connection connectionPtr), Nothing, Nothing))
 
 
 ||| destroys the db client
@@ -85,7 +85,7 @@ client_destroy : DBState State DBResult
 client_destroy = do
   CurrentState (last_state, (Just connection), _, _) <- GetDBState
   case Imports.client_destroy connection of
-    _ => PutDBState (CurrentState (last_state ++ ">>client_destroy", Nothing, Nothing, Nothing))
+    _ => PutDBState (CurrentState (last_state ++ " >> client_destroy", Nothing, Nothing, Nothing))
 
 
 ||| returns a reference to a collection in the database
@@ -96,7 +96,7 @@ get_collection : (db_name : String) -> (collection_name : String) -> DBState Sta
 get_collection db_name collection_name = do
   CurrentState (last_state, (Just connection), _, _) <- GetDBState
   case Imports.client_get_collection connection db_name collection_name of
-    (DBResultCollection x) => PutDBState (CurrentState (last_state ++ ">> client_get_collection", (Just connection), Just x, Nothing))
+    (DBResultCollection x) => PutDBState (CurrentState (last_state ++ " >> client_get_collection", (Just connection), Just x, Nothing))
 
 
 ||| inserts a stringified json object into a , return true if successful
@@ -108,7 +108,7 @@ collection_insert document = do
   let bsonDoc = new_from_json document
   pure (Imports.collection_insert collection bsonDoc)
   pure (destroy bsonDoc)
-  PutDBState (CurrentState (last_state ++ "\n\r >>collection_insert", (Just connection),(Just collection), Nothing))
+  PutDBState (CurrentState (last_state ++ " >> collection_insert", (Just connection),(Just collection), Nothing))
 
 
 ||| queries the collection and returns a reference to a cursor which can be used to retrieve documents
@@ -126,7 +126,7 @@ collection_find filter options = do
    let (DBResultCursor dbCursor) = Imports.collection_find collection (Query filter_bson) (Options opts_bson)
    pure (destroy filter_bson)
    pure (destroy opts_bson)
-   PutDBState (CurrentState(last_state ++ "\n >>collection_find", (Just connection), (Just collection), (Just dbCursor)))
+   PutDBState (CurrentState(last_state ++ " >> collection_find", (Just connection), (Just collection), (Just dbCursor)))
 
 
 ||| sets the mongo driver's error level
@@ -134,18 +134,36 @@ collection_find filter options = do
 export
 client_set_error_api : (error_level : Int) -> DBState State DBResult
 client_set_error_api error_level = do
-  CurrentState (last_state, (Just (Connection connection)), collection, cursor) <- GetDBState
+  CurrentState (last_state, (Just connection), collection, cursor) <- GetDBState
   let result = Imports.set_error_api connection error_level
-  PutDBState(CurrentState (last_state ++ "\n >>client_set_error_api", (Just (Connection connection)), collection, cursor))
+  PutDBState(CurrentState (last_state ++ " >> client_set_error_api", (Just connection), collection, cursor))
 
 ||| iterates through a cursor and returns somethig useful
 ||| see http://mongoc.org/libmongoc/current/mongoc_cursor_next.html
 export
 cursor_next : DBState State DBResult
 cursor_next = do
-  CurrentState (last_state, connection, collection, (Just (Cursor cursor))) <- GetDBState
-  PutDBState(CurrentState (last_state ++ "\n >> cursor_next", connection, collection, (Just (Cursor cursor))))
+  CurrentState (last_state, connection, collection, (Just cursor)) <- GetDBState
+  PutDBState(CurrentState (last_state ++ " >> cursor_next", connection, collection, (Just cursor)))
   PureDBState (Imports.cursor_next cursor)
+
+||| destroys the collection reference
+export
+collection_destroy : DBState State DBResult
+collection_destroy = do
+  CurrentState (last_state, connection, (Just collection), _) <- GetDBState
+  PutDBState(CurrentState (last_state ++ " >> collection_destroy", connection, Nothing, Nothing))
+  PureDBState(Imports.collection_destroy collection)
+
+-- collection_destroy = do
+--   collection <- GetDBCollection
+--   foreign FFI_C "mongoc_" (Ptr -> IO()) (handle collection)
+
+  -- DBCollectionBind GetCollection
+  --   (\collection =>
+  --      IOBindIODatabase (foreign FFI_C "mongoc_" (Ptr -> IO()) (handle collection))
+  --        (\_ => PureIODatabase ()))
+
 
 ||| removes documents matching the query, returns true if deletion occured
 ||| @collection the collection to query
@@ -174,17 +192,6 @@ collection_find_and_modify : (collection : DBCollection) -> (query : String) -> 
 --   pure result
 
 
-||| destroys the collection reference
-export
-collection_destroy : DBState State ()
--- collection_destroy = do
---   collection <- GetDBCollection
---   foreign FFI_C "mongoc_" (Ptr -> IO()) (handle collection)
-
-  -- DBCollectionBind GetCollection
-  --   (\collection =>
-  --      IOBindIODatabase (foreign FFI_C "mongoc_" (Ptr -> IO()) (handle collection))
-  --        (\_ => PureIODatabase ()))
 
 
 ||| destroys the cursor reference
