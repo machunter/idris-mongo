@@ -19,7 +19,8 @@ export LD_LIBRARY_PATH=/usr/local/lib/
 #build
 idris --build mongolib.ipkg
 
-
+# start mongodb
+mongod -vvvvv --config /usr/local/etc/mongod.conf
 
 # Reminder
 
