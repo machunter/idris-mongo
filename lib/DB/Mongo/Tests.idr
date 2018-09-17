@@ -34,39 +34,39 @@ server_uri = "mongodb://127.0.0.1:27017"
 --   DB.Mongo.collection_destroy collection
 --   DB.Mongo.client_destroy db
 
-
-nice_path : DBState State DBResult
-nice_path = do
+initDB : DBState State DBResult
+initDB = do
   init
   dbConnect server_uri
   client_set_error_api 2
+
+
+test1 : DBState State DBResult
+test1 = do
+  initDB
   get_collection "testdb" "testcoll"
-  collection_insert "{\"name\":\"burc\",\"age\":50}"
-  collection_insert "{\"name\":\"bora\",\"age\":35}"
-  collection_find  "{\"name\":\"bora\"}" Nothing
+  collection_insert "{\"name\":\"burc1\",\"age\":50}"
+  collection_insert "{\"name\":\"burc2\",\"age\":35}"
+  collection_find  "{\"name\":\"burc1\"}" Nothing
   cursor_next
 
+verifyTest1 : (DBResult, State) -> IO ()
+verifyTest1 (DBResultJSON json, CurrentState (p, _, _, _)) = let (JString result) = value json "name" in
+    if result == "burc" then printLn("Success!") else printLn(p)
+verifyTest1 (DBResultJSON json, CurrentState s) = printLn("Test1 Failed!")
 
+test1Cleanup : DBState State DBResult
+test1Cleanup = do
+  initDB
+  get_collection "testdb" "testcoll"
+  collection_destroy
 
-
-myProgram : DBState State DBResult
-myProgram =
-    nice_path
-
-
-processResult : (DBResult, State) -> IO ()
-processResult (DBResultError string, CurrentState (p, _, _, _)) = printLn("DBResultError:" ++ string)
---processResult (DBResultVoid, CurrentState (p, _, _, _)) = printLn("DBResultVoid")
-processResult (DBResultPtr ptr, CurrentState (p, _, _, _)) = printLn("DBResultPtr")
-processResult (DBResultCount int, CurrentState (p, _, _, _)) = printLn("DBResultCount")
-processResult (DBResultCollection collection, CurrentState (p, _, _, _)) = printLn("DBResultCollection")
-processResult (DBResultConnection connection, CurrentState (p, _, _, _)) = printLn("DBResultConnection")
-processResult (DBResultCursor cursor, CurrentState (p, _, _, _)) = printLn("DBResultCursor")
-processResult (DBResultBool result, CurrentState (p, _, _, _)) = printLn("DBResultBool")
-processResult (DBResultJSON json, CurrentState (p, _, _, _)) = let (JString result) = value json "name" in
-    if result == "burc" then printLn("Success!") else printLn(result)
+done: (DBResult, State) -> IO ()
+done (DBResultJSON json, CurrentState (p, _, _, _)) = printLn(p)
+done (_, CurrentState (p, _, _, _)) = printLn(p)
 
 namespace Main
   main : IO ()
   main = do
-    processResult (run myProgram initialState)
+    verifyTest1 (run test1 initialState)
+    done (run test1Cleanup initialState)
