@@ -1,6 +1,9 @@
 #include "mongolib.h"
 
-
+void _collection_destroy (mongoc_collection_t *collection) {
+  printf ("%s \n", "_mongoc_collection_destroy");
+  return mongoc_collection_destroy (collection);
+}
 
 int _collection_insert(mongoc_collection_t *collection, const bson_t *document) {
   printf ("%s \n", "_collection_insert");
@@ -109,6 +112,11 @@ bson_t* _init(void) {
   printf ("%s \n", "_init");
   mongoc_init();
   return NULL;
+}
+
+void _cleanup(void) {
+  printf ("%s \n", "_cleanup");
+  mongoc_cleanup();
 }
 
 char* _bson_as_json(const bson_t *bson, size_t *length) {
