@@ -20,7 +20,13 @@ data DBOptions = Options BSON
 public export
 data DBWriteConcern = WriteConcern Ptr
 
-
+public export
+record DBState where
+  constructor MkDBState
+  executionLog : String
+  connection : Maybe DBConnection
+  collection : Maybe DBCollection
+  cursor : Maybe DBCursor
 
 public export
 data State = CurrentState (String, Maybe DBConnection, Maybe DBCollection, Maybe DBCursor)
@@ -33,7 +39,7 @@ data DBResult =
   DBResultCollection DBCollection |
   DBResultConnection DBConnection |
   DBResultCursor DBCursor |
-  DBResultBool bool |
+  DBResultBool Bool |
   DBResultJSON JSON |
   DBResultError String
 

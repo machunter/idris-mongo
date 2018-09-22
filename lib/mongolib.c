@@ -1,8 +1,14 @@
 #include "mongolib.h"
 
-void _collection_destroy (mongoc_collection_t *collection) {
-  printf ("%s \n", "_mongoc_collection_destroy");
-  return mongoc_collection_destroy (collection);
+int _collection_destroy(mongoc_collection_t *collection) {
+  if (collection) {
+    printf ("%s \n", "_mongoc_collection_destroy");
+    mongoc_collection_drop(collection, NULL);
+    return 1;
+  } else  {
+    printf ("%s \n", "_mongoc_collection_destroy - no collection specified");
+    return 0;
+  }
 }
 
 int _collection_insert(mongoc_collection_t *collection, const bson_t *document) {

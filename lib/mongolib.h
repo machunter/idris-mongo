@@ -8,9 +8,9 @@ void _cleanup(void);
 
 
 // collection bound
-mongoc_collection_t * _client_get_collection (mongoc_client_t *client, const char *db, const char *collection);
+mongoc_collection_t * _client_get_collection(mongoc_client_t *client, const char *db, const char *collection);
 
-void _collection_destroy (mongoc_collection_t *collection);
+int _collection_destroy(mongoc_collection_t *collection);
 
 int _collection_insert(mongoc_collection_t *collection, const bson_t *document);
 

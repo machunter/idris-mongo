@@ -46,7 +46,13 @@ cleanup = let result = unsafePerformIO (foreign FFI_C "mongoc_cleanup" (IO ())) 
 export
 collection_destroy : DBCollection -> DBResult
 collection_destroy (Collection collection_handle) =
-  let _ = unsafePerformIO (foreign FFI_C "_collection_destroy" (Ptr -> IO ()) collection_handle) in DBResultVoid
+  let result = unsafePerformIO (foreign FFI_C "_collection_destroy" (Ptr -> IO Int) collection_handle)
+    in
+      if result == 0
+        then DBResultError "_collection_destroy"
+        else DBResultBool True
+
+
 
 
 
@@ -68,7 +74,7 @@ collection_remove (Collection collection_handle) (MkBSON selector_handle) =
     in
       if result == 0
         then DBResultError "collection_remove"
-        else DBResultBool (Just result)
+        else DBResultCount result
 
 export
 set_error_api : DBConnection -> Int -> DBResult
@@ -90,7 +96,7 @@ collection_find_and_modify (Collection collection_handle) (MkBSON query_handle) 
   in
     if (result == 0)
       then DBResultError "collection_find_and_modify"
-      else DBResultBool (Just result)
+      else DBResultCount result
 
 export
 collection_find : (collection: DBCollection) -> (filter: DBQuery) -> (options: DBOptions) -> DBResult
