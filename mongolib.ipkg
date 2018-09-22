@@ -1,6 +1,7 @@
 package mongolib
 sourcedir = lib
-modules = DB.Mongo, DB.Mongo.Bson, DB.Mongo.CImports, DB.Mongo.Definitions, Language.JSON.Helpers
+modules = DB.Mongo, DB.Mongo.Bson, DB.Mongo.CImports, DB.Mongo.Definitions, Language.JSON.Helpers, DB.Mongo.Tests
 makefile = Makefile
 pkgs = contrib
 objs = mongolib.o, mongolib.h
+tests = DB.Mongo.Tests.test2

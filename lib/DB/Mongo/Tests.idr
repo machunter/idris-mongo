@@ -1,11 +1,12 @@
 module DB.Mongo.Tests
+
 import DB.Mongo
 import DB.Mongo.Bson
 import DB.Mongo.Definitions
 import Language.JSON
 import Language.JSON.Helpers
 
-
+%access export
 
 server_uri : String
 server_uri = "mongodb://127.0.0.1:27017"
@@ -38,11 +39,11 @@ initDB : DBState State DBResult
 initDB = do
   init
   dbConnect server_uri
-  client_set_error_api 2
+  client_set_error_api 3
 
 
-test1 : DBState State DBResult
-test1 = do
+insertAndFind : DBState State DBResult
+insertAndFind = do
   initDB
   get_collection "testdb" "testcoll"
   collection_insert "{\"name\":\"burc1\",\"age\":50}"
@@ -50,23 +51,23 @@ test1 = do
   collection_find  "{\"name\":\"burc1\"}" Nothing
   cursor_next
 
-verifyTest1 : (DBResult, State) -> IO ()
-verifyTest1 (DBResultJSON json, CurrentState (p, _, _, _)) = let (JString result) = value json "name" in
+check_insertAndFind : (DBResult, State) -> IO ()
+check_insertAndFind (DBResultJSON json, CurrentState (p, _, _, _)) = let (JString result) = value json "name" in
     if result == "burc" then printLn("Success!") else printLn(p)
-verifyTest1 (DBResultJSON json, CurrentState s) = printLn("Test1 Failed!")
+check_insertAndFind (DBResultJSON json, CurrentState s) = printLn("Test1 Failed!")
 
-test1Cleanup : DBState State DBResult
-test1Cleanup = do
+dropDatabase : DBState State DBResult
+dropDatabase = do
   initDB
-  get_collection "testdb" "testcoll"
+  get_collection "testdb1" "testcoll2"
+  collection_insert "{\"name\":\"sulu\",\"age\":50}"
   collection_destroy
 
-done: (DBResult, State) -> IO ()
-done (DBResultJSON json, CurrentState (p, _, _, _)) = printLn(p)
-done (_, CurrentState (p, _, _, _)) = printLn(p)
+check_dropDatabase : (DBResult, State) -> IO ()
+check_dropDatabase (_, CurrentState (p, _, _, _)) = printLn(p)
 
-namespace Main
-  main : IO ()
-  main = do
-    verifyTest1 (run test1 initialState)
-    done (run test1Cleanup initialState)
+test1 : IO ()
+test1 = check_insertAndFind (run insertAndFind initialState)
+
+test2 : IO ()
+test2 = check_dropDatabase (run dropDatabase initialState)

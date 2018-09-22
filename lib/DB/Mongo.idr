@@ -152,8 +152,9 @@ export
 collection_destroy : DBState State DBResult
 collection_destroy = do
   CurrentState (last_state, connection, (Just collection), _) <- GetDBState
-  PutDBState(CurrentState (last_state ++ " >> collection_destroy", connection, Nothing, Nothing))
-  PureDBState(Imports.collection_destroy collection)
+  case Imports.collection_destroy collection of
+    DBResultBool True => PutDBState(CurrentState (last_state ++ " >> collection_destroy", connection, Nothing, Nothing))
+    _ => PutDBState(CurrentState (last_state ++ " >> collection_destroy_fa", connection, Nothing, Nothing))
 
 -- collection_destroy = do
 --   collection <- GetDBCollection
