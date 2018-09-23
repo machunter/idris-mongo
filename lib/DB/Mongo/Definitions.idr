@@ -28,11 +28,14 @@ record DBState where
   cursor : Maybe DBCursor
 
 public export
+data DebugMode = DebugModeOn | DebugModeOff
+
+public export
 CallTrace : Type
 CallTrace = List String
 
 public export
-data State = CurrentState (CallTrace, Maybe DBConnection, Maybe DBCollection, Maybe DBCursor)
+data State = CurrentState (Maybe CallTrace, Maybe DBConnection, Maybe DBCollection, Maybe DBCursor)
 
 public export
 data DBResult =

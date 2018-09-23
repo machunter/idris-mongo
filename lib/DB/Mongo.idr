@@ -44,12 +44,17 @@ run (BindDBState cmd prog) state = let (val, nextState) = run cmd state in run (
 run (PureDBState newState) state = (newState, state)
 
 export
-initialState : State
-initialState = CurrentState (["start"], Nothing, Nothing, Nothing)
+initialState : DebugMode -> State
+initialState DebugModeOn = CurrentState (Just ["start"], Nothing, Nothing, Nothing)
+initialState DebugModeOff = CurrentState (Nothing, Nothing, Nothing, Nothing)
 
 export
-initState : DBState State DBResult
-initState = PutDBState initialState
+initState : DebugMode -> DBState State DBResult
+initState debugMode = PutDBState (initialState debugMode)
+
+updateCallTrace: Maybe CallTrace -> String -> Maybe CallTrace
+updateCallTrace Nothing _ = Nothing
+updateCallTrace (Just callStack) functionString = Just (functionString::callStack)
 
 ||| initializes the mongo driver, must be called before starting
 export
@@ -57,7 +62,7 @@ init : DBState State DBResult
 init = do
     CurrentState (last_state, conn, coll, cursor) <- GetDBState
     PureDBState (Imports.init)
-    PutDBState (CurrentState ("init"::last_state, conn, coll, cursor))
+    PutDBState (CurrentState (updateCallTrace last_state "init", conn, coll, cursor))
 
 
 ||| cleans up the driver, must be called at the end
@@ -66,7 +71,7 @@ cleanup : DBState State DBResult
 cleanup = do
   CurrentState (last_state, conn, coll, cursor) <- GetDBState
   PureDBState (Imports.cleanup)
-  PutDBState (CurrentState ("cleanup"::last_state, conn, coll, cursor))
+  PutDBState (CurrentState (updateCallTrace last_state "cleanup", conn, coll, cursor))
 
 
 ||| creates a new client (db connection) which must be destroyed by calling client_destroy
@@ -76,7 +81,7 @@ dbConnect : (uri : String) -> DBState State DBResult
 dbConnect uri = do
   CurrentState (last_state, _, _, _) <- GetDBState
   case Imports.client_new uri of
-    DBResultConnection (Connection connectionPtr) => PutDBState (CurrentState ("client_new"::last_state, Just (Connection connectionPtr), Nothing, Nothing))
+    DBResultConnection (Connection connectionPtr) => PutDBState (CurrentState (updateCallTrace last_state  "client_new", Just (Connection connectionPtr), Nothing, Nothing))
 
 
 ||| destroys the db client
@@ -85,7 +90,7 @@ client_destroy : DBState State DBResult
 client_destroy = do
   CurrentState (last_state, (Just connection), _, _) <- GetDBState
   case Imports.client_destroy connection of
-    _ => PutDBState (CurrentState ("client_destroy"::last_state, Nothing, Nothing, Nothing))
+    _ => PutDBState (CurrentState (updateCallTrace last_state "client_destroy", Nothing, Nothing, Nothing))
 
 
 ||| returns a reference to a collection in the database
@@ -96,7 +101,7 @@ get_collection : (db_name : String) -> (collection_name : String) -> DBState Sta
 get_collection db_name collection_name = do
   CurrentState (last_state, (Just connection), _, _) <- GetDBState
   case Imports.client_get_collection connection db_name collection_name of
-    (DBResultCollection x) => PutDBState (CurrentState ("client_get_collection"::last_state, (Just connection), Just x, Nothing))
+    (DBResultCollection x) => PutDBState (CurrentState (updateCallTrace last_state "client_get_collection", (Just connection), Just x, Nothing))
 
 
 ||| inserts a stringified json object into a , return true if successful
@@ -108,7 +113,7 @@ collection_insert document = do
   let bsonDoc = new_from_json document
   pure (Imports.collection_insert collection bsonDoc)
   pure (destroy bsonDoc)
-  PutDBState (CurrentState ("collection_insert"::last_state, (Just connection),(Just collection), Nothing))
+  PutDBState (CurrentState (updateCallTrace last_state "collection_insert", (Just connection),(Just collection), Nothing))
 
 
 ||| queries the collection and returns a reference to a cursor which can be used to retrieve documents
@@ -126,7 +131,7 @@ collection_find filter options = do
    let (DBResultCursor dbCursor) = Imports.collection_find collection (Query filter_bson) (Options opts_bson)
    pure (destroy filter_bson)
    pure (destroy opts_bson)
-   PutDBState (CurrentState("collection_find"::last_state, (Just connection), (Just collection), (Just dbCursor)))
+   PutDBState (CurrentState(updateCallTrace last_state "collection_find", (Just connection), (Just collection), (Just dbCursor)))
 
 
 ||| sets the mongo driver's error level
@@ -136,7 +141,7 @@ client_set_error_api : (error_level : Int) -> DBState State DBResult
 client_set_error_api error_level = do
   CurrentState (last_state, (Just connection), collection, cursor) <- GetDBState
   let result = Imports.set_error_api connection error_level
-  PutDBState(CurrentState ("client_set_error_api"::last_state, (Just connection), collection, cursor))
+  PutDBState(CurrentState (updateCallTrace last_state "client_set_error_api", (Just connection), collection, cursor))
 
 ||| iterates through a cursor and returns somethig useful
 ||| see http://mongoc.org/libmongoc/current/mongoc_cursor_next.html
@@ -144,7 +149,7 @@ export
 cursor_next : DBState State DBResult
 cursor_next = do
   CurrentState (last_state, connection, collection, (Just cursor)) <- GetDBState
-  PutDBState(CurrentState ("cursor_next"::last_state, connection, collection, (Just cursor)))
+  PutDBState(CurrentState (updateCallTrace last_state "cursor_next", connection, collection, (Just cursor)))
   PureDBState (Imports.cursor_next cursor)
 
 ||| destroys the collection reference
@@ -153,8 +158,8 @@ collection_destroy : DBState State DBResult
 collection_destroy = do
   CurrentState (last_state, connection, (Just collection), _) <- GetDBState
   case Imports.collection_destroy collection of
-    DBResultBool True => PutDBState(CurrentState ("collection_destroy"::last_state, connection, Nothing, Nothing))
-    _ => PutDBState(CurrentState ("collection_destroy_failed"::last_state, connection, Nothing, Nothing))
+    DBResultBool True => PutDBState(CurrentState (updateCallTrace last_state "collection_destroy", connection, Nothing, Nothing))
+    _ => PutDBState(CurrentState (updateCallTrace last_state "collection_destroy_failed", connection, Nothing, Nothing))
 
 -- collection_destroy = do
 --   collection <- GetDBCollection
