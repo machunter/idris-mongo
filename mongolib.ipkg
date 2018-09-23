@@ -4,4 +4,4 @@ modules = DB.Mongo, DB.Mongo.Bson, DB.Mongo.CImports, DB.Mongo.Definitions, Lang
 makefile = Makefile
 pkgs = contrib
 objs = mongolib.o, mongolib.h
-tests = DB.Mongo.Tests.test2
+tests = DB.Mongo.Tests.test1, DB.Mongo.Tests.test2

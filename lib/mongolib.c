@@ -2,17 +2,23 @@
 
 int _collection_destroy(mongoc_collection_t *collection) {
   if (collection) {
+#ifdef LOGCCALLS
     printf ("%s \n", "_mongoc_collection_destroy");
+#endif
     mongoc_collection_drop(collection, NULL);
     return 1;
   } else  {
+#ifdef LOGCCALLS
     printf ("%s \n", "_mongoc_collection_destroy - no collection specified");
+#endif
     return 0;
   }
 }
 
 int _collection_insert(mongoc_collection_t *collection, const bson_t *document) {
+#ifdef LOGCCALLS
   printf ("%s \n", "_collection_insert");
+#endif
   bson_error_t error;
   mongoc_write_concern_t *write_concern = mongoc_write_concern_new ();
   mongoc_write_concern_set_w(write_concern, MONGOC_WRITE_CONCERN_W_DEFAULT);
@@ -28,14 +34,18 @@ int _collection_insert(mongoc_collection_t *collection, const bson_t *document) 
 
 
 bson_t* _bson_new_from_json (char *json_string) {
+#ifdef LOGCCALLS
   printf ("%s \n", "_bson_new_from_json");
+#endif
   bson_error_t error;
   bson_t *bson = bson_new_from_json ( (uint8_t *)json_string, strlen(json_string), &error);
   return bson;
 }
 
 void _bson_destroy(bson_t* bson) {
+#ifdef LOGCCALLS
   printf ("%s \n", "_bson_destroy");
+#endif
   return bson_destroy(bson);
 }
 
@@ -92,40 +102,46 @@ bool _collection_update(mongoc_collection_t *collection, const bson_t *selector,
 
 
 mongoc_collection_t * _client_get_collection (mongoc_client_t *client, const char *db, const char *collection) {
+#ifdef LOGCCALLS
   printf ("%s \n", "_client_get_collection");
-
+#endif
   mongoc_collection_t * collection_ptr = mongoc_client_get_collection (client,db,collection);
   return collection_ptr;
 }
 
 bson_t * _cursor_next(mongoc_cursor_t* cursor) {
+#ifdef LOGCCALLS
   printf ("%s \n", "_cursor_next");
-
+#endif
   bson_t *bson = bson_new();
 
   bool result = mongoc_cursor_next (cursor, (const bson_t **) &bson);
 
   if (result) {
-    printf ("%s \n", "_cursor_next:NOTNULL");
     return bson;
   } else {
-    printf ("%s \n", "_cursor_next:NULL");
     return NULL;
   }
 }
 
 bson_t* _init(void) {
+#ifdef LOGCCALLS
   printf ("%s \n", "_init");
+#endif
   mongoc_init();
   return NULL;
 }
 
 void _cleanup(void) {
+#ifdef LOGCCALLS
   printf ("%s \n", "_cleanup");
+#endif
   mongoc_cleanup();
 }
 
 char* _bson_as_json(const bson_t *bson, size_t *length) {
+#ifdef LOGCCALLS
   printf("%s \n", "_bson_as_json");
+#endif
   return bson_as_json(bson, length);
 }

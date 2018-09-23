@@ -2,6 +2,7 @@
 CC = gcc
 
 # compiler flags:
+# add -DLOGCCALLS if you want the verbose mode of C function calls (i.e. they print when they are called.)
 CFLAGS=-Wall
 
 # define any libraries to link:

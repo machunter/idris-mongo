@@ -28,9 +28,8 @@ insertAndFind = do
   cursor_next
 
 check_insertAndFind : (DBResult, State) -> IO ()
-check_insertAndFind (DBResultJSON json, CurrentState (p, _, _, _)) = let (JString result) = value json "name" in
-    if result == "burc" then printLn("Success!") else printLn(p)
-check_insertAndFind (DBResultJSON json, CurrentState s) = printLn("Test1 Failed!")
+check_insertAndFind (DBResultJSON json, CurrentState s) = let (JString result) = value json "name" in
+    if result == "burc1" then printLn("Success insertAndFind!") else printLn("Failed insertAndFind!")
 
 dropDatabase : DBState State DBResult
 dropDatabase = do
@@ -40,7 +39,7 @@ dropDatabase = do
   collection_destroy
 
 check_dropDatabase : (DBResult, State) -> IO ()
-check_dropDatabase (_, CurrentState (p, _, _, _)) = printLn(p)
+check_dropDatabase (_, CurrentState (p, _, _, _)) = printLn("Success dropDatabase!")
 
 test1 : IO ()
 test1 = check_insertAndFind (run insertAndFind (initialState DebugModeOff))
