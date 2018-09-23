@@ -23,13 +23,16 @@ data DBWriteConcern = WriteConcern Ptr
 public export
 record DBState where
   constructor MkDBState
-  executionLog : String
   connection : Maybe DBConnection
   collection : Maybe DBCollection
   cursor : Maybe DBCursor
 
 public export
-data State = CurrentState (String, Maybe DBConnection, Maybe DBCollection, Maybe DBCursor)
+CallTrace : Type
+CallTrace = List String
+
+public export
+data State = CurrentState (CallTrace, Maybe DBConnection, Maybe DBCollection, Maybe DBCursor)
 
 public export
 data DBResult =
