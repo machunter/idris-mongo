@@ -41,8 +41,24 @@ dropDatabase = do
 check_dropDatabase : (DBResult, State) -> IO ()
 check_dropDatabase (_, CurrentState (p, _, _, _)) = printLn("Success dropDatabase!")
 
+removeRecord : DBState State DBResult
+removeRecord = do
+    initDB
+    get_collection "testdb" "testcoll"
+    collection_insert "{\"name\":\"burc1\",\"age\":50}"
+    collection_insert "{\"name\":\"burc1\",\"age\":35}"
+    collection_remove "{\"name\":\"burc1\"}"
+
+check_removeRecord : (DBResult, State) -> IO ()
+check_removeRecord (DBResultCount count, CurrentState (Just p, _, _, _)) = if count == 1 then printLn("Success removeRecord!", count) else printLn("Failed removeRecord")
+check_removeRecord (_, CurrentState (p, _, _, _)) = printLn("Failed removeRecord!")
+
+
 test1 : IO ()
 test1 = check_insertAndFind (run insertAndFind (initialState DebugModeOff))
 
 test2 : IO ()
 test2 = check_dropDatabase (run dropDatabase (initialState DebugModeOff))
+
+test3 : IO ()
+test3 = check_removeRecord (run removeRecord (initialState DebugModeOn))

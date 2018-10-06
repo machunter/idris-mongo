@@ -52,10 +52,6 @@ collection_destroy (Collection collection_handle) =
         then DBResultError "_collection_destroy"
         else DBResultBool True
 
-
-
-
-
 export
 collection_insert : DBCollection -> BSON -> DBResult
 collection_insert (Collection collection_handle) (MkBSON bson_document) =
@@ -68,9 +64,9 @@ collection_insert (Collection collection_handle) (MkBSON bson_document) =
 
 
 export
-collection_remove : DBCollection -> BSON -> DBResult
-collection_remove (Collection collection_handle) (MkBSON selector_handle) =
-  let result = unsafePerformIO (foreign FFI_C "_collection_remove" (Ptr -> Ptr -> IO Int) collection_handle selector_handle)
+collection_remove : DBCollection -> DBQuery -> DBResult
+collection_remove (Collection collection) (Query (MkBSON query)) =
+  let result = unsafePerformIO (foreign FFI_C "_collection_remove" (Ptr -> Ptr -> IO Int) collection query)
     in
       if result == 0
         then DBResultError "collection_remove"

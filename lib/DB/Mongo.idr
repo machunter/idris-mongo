@@ -41,7 +41,7 @@ run : DBState stateType a -> (st: stateType) -> (a, stateType)
 run GetDBState state = (state, state)
 run (PutDBState newState) st = (DBResultVoid, newState)
 run (BindDBState cmd prog) state = let (val, nextState) = run cmd state in run (prog val) nextState
-run (PureDBState newState) state = (newState, state)
+run (PureDBState val) state = (val, state)
 
 export
 initialState : DebugMode -> State
@@ -123,15 +123,15 @@ collection_insert document = do
 export
 collection_find : (filter : String) -> (options : Maybe String) -> DBState State DBResult
 collection_find filter options = do
-   CurrentState (last_state, (Just connection), (Just collection), _) <- GetDBState
-   let filter_bson = new_from_json filter
-   let opts_bson = case options of
-     Nothing => new_from_json "{}"
-     Just options_string => new_from_json options_string
-   let (DBResultCursor dbCursor) = Imports.collection_find collection (Query filter_bson) (Options opts_bson)
-   pure (destroy filter_bson)
-   pure (destroy opts_bson)
-   PutDBState (CurrentState(updateCallTrace last_state "collection_find", (Just connection), (Just collection), (Just dbCursor)))
+     CurrentState (last_state, (Just connection), (Just collection), _) <- GetDBState
+     let filter_bson = new_from_json filter
+     let opts_bson = case options of
+       Nothing => new_from_json "{}"
+       Just options_string => new_from_json options_string
+     let (DBResultCursor dbCursor) = Imports.collection_find collection (Query filter_bson) (Options opts_bson)
+     pure (destroy filter_bson)
+     pure (destroy opts_bson)
+     PutDBState (CurrentState(updateCallTrace last_state "collection_find", (Just connection), (Just collection), (Just dbCursor)))
 
 
 ||| sets the mongo driver's error level
@@ -172,15 +172,15 @@ collection_destroy = do
 
 
 ||| removes documents matching the query, returns true if deletion occured
-||| @collection the collection to query
-||| @selector a valid stringified json query
+||| @filter a valid stringified json query object
 export
-collection_remove : (collection : DBCollection) -> (selector : String) -> IO (Maybe Bool)
--- collection_remove (MkDBCollection collection_handle) selector = do
---   bson_selector <- DB.Mongo.Bson.new_from_json (Just selector)
---   result <- _collection_remove collection_handle bson_selector
---   DB.Mongo.Bson.destroy bson_selector
---   pure result
+collection_remove : (filter : String) -> DBState State DBResult
+collection_remove filter  = do
+     CurrentState (last_state, connection, (Just collection), cursor) <- GetDBState
+     PutDBState (CurrentState(updateCallTrace last_state "collection_remove", connection, (Just collection), cursor))
+     let filter_bson = new_from_json filter
+     let (DBResultCount result) = (Imports.collection_remove collection (Query filter_bson))
+     PureDBState (DBResultCount result)
 
 
 ||| update the first document matching the query
