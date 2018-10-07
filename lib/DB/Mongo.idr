@@ -134,6 +134,7 @@ collection_find filter options = do
      PutDBState (CurrentState(updateCallTrace last_state "collection_find", (Just connection), (Just collection), (Just dbCursor)))
 
 
+
 ||| sets the mongo driver's error level
 ||| @error_level the error level to set
 export
@@ -181,6 +182,15 @@ collection_remove filter  = do
      let filter_bson = new_from_json filter
      let (DBResultCount result) = (Imports.collection_remove collection (Query filter_bson))
      PureDBState (DBResultCount result)
+
+export
+collection_count : (filter : String) -> DBState State DBResult
+collection_count filter = do
+  CurrentState (last_state, connection, (Just collection), cursor) <- GetDBState
+  PutDBState (CurrentState(updateCallTrace last_state "collection_count", connection, (Just collection), cursor))
+  let filter_bson = new_from_json filter
+  let (DBResultCount result) = (Imports.collection_count_documents collection (Query filter_bson))
+  PureDBState (DBResultCount result)
 
 
 ||| update the first document matching the query

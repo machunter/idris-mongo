@@ -22,6 +22,8 @@ int _collection_find_and_modify(mongoc_collection_t *collection, const bson_t *q
 
 bool _collection_update(mongoc_collection_t *collection, const bson_t *selector, const bson_t *update, int update_flags);
 
+int _mongoc_collection_count_documents(mongoc_collection_t *collection, const bson_t *filter);
+
 // cursor bound
 bson_t * _cursor_next(mongoc_cursor_t* cursor);
 

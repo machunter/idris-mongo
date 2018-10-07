@@ -58,6 +58,21 @@ mongoc_cursor_t* _collection_find(mongoc_collection_t *collection, const bson_t 
   return cursor;
 }
 
+int _mongoc_collection_count_documents(mongoc_collection_t *collection, const bson_t *filter) {
+  bson_error_t error;
+  mongoc_write_concern_t *write_concern = mongoc_write_concern_new();
+  mongoc_write_concern_set_w(write_concern, MONGOC_WRITE_CONCERN_W_DEFAULT);
+  int result = mongoc_collection_count_documents(collection, filter, NULL,NULL, NULL, &error);
+  mongoc_write_concern_destroy(write_concern);
+  if (result > -1) {
+    return result;
+  } else {
+    fprintf(stderr, "ERROR: %d.%d: %s\n", error.domain, error.code, error.message);
+    return -1;
+  }
+}
+
+
 
 int _collection_remove(mongoc_collection_t *collection, const bson_t *selector) {
   bson_error_t error;

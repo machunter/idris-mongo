@@ -104,6 +104,15 @@ collection_find (Collection collection) (Query (MkBSON query)) (Options (MkBSON 
       else DBResultCursor (Cursor result)
 
 export
+collection_count_documents: (collection: DBCollection) -> (filter: DBQuery) -> DBResult
+collection_count_documents (Collection collection) (Query (MkBSON query)) =
+  let result = unsafePerformIO (foreign FFI_C "_mongoc_collection_count_documents" (Ptr -> Ptr -> IO Int) collection query)
+  in
+    if result == -1
+      then DBResultError "collection_count_documents"
+      else DBResultCount result
+
+export
 cursor_next : DBCursor -> DBResult
 cursor_next (Cursor cursor_handle) =
   let doc_handle =  unsafePerformIO (foreign FFI_C "_cursor_next" (Ptr -> IO Ptr) cursor_handle)

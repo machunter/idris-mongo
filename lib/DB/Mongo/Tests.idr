@@ -50,9 +50,22 @@ removeRecord = do
     collection_remove "{\"name\":\"burc1\"}"
 
 check_removeRecord : (DBResult, State) -> IO ()
-check_removeRecord (DBResultCount count, CurrentState (Just p, _, _, _)) = if count == 1 then printLn("Success removeRecord!", count) else printLn("Failed removeRecord")
+check_removeRecord (DBResultCount count, CurrentState (Just p, _, _, _)) = if count == 1 then printLn("Success removeRecord!", count) else printLn("Failed removeRecord", count)
 check_removeRecord (_, CurrentState (p, _, _, _)) = printLn("Failed removeRecord!")
 
+countDocument: DBState State DBResult
+countDocument = do
+  initDB
+  get_collection "testdb" "testcoll"
+  collection_destroy
+  get_collection "testdb" "testcoll"
+  collection_insert "{\"name\":\"burc1\",\"age\":50}"
+  collection_insert "{\"name\":\"burc1\",\"age\":35}"
+  collection_insert "{\"name\":\"burc1\",\"age\":50}"
+  collection_count "{\"name\":\"burc1\"}"
+
+check_countDocument : (DBResult, State) -> IO ()
+check_countDocument (DBResultCount count, CurrentState (Just p, _, _, _)) = if count == 2 then printLn("Success countDocument!", count) else printLn("Failed countDocument", count)
 
 test1 : IO ()
 test1 = check_insertAndFind (run insertAndFind (initialState DebugModeOff))
@@ -62,3 +75,6 @@ test2 = check_dropDatabase (run dropDatabase (initialState DebugModeOff))
 
 test3 : IO ()
 test3 = check_removeRecord (run removeRecord (initialState DebugModeOn))
+
+test4 : IO ()
+test4 = check_countDocument (run countDocument (initialState DebugModeOn))
