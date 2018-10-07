@@ -70,7 +70,7 @@ collection_remove (Collection collection) (Query (MkBSON query)) =
     in
       if result == 0
         then DBResultError "collection_remove"
-        else DBResultCount result
+        else DBResultBool True
 
 export
 set_error_api : DBConnection -> Int -> DBResult

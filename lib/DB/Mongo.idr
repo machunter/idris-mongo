@@ -180,8 +180,7 @@ collection_remove filter  = do
      CurrentState (last_state, connection, (Just collection), cursor) <- GetDBState
      PutDBState (CurrentState(updateCallTrace last_state "collection_remove", connection, (Just collection), cursor))
      let filter_bson = new_from_json filter
-     let (DBResultCount result) = (Imports.collection_remove collection (Query filter_bson))
-     PureDBState (DBResultCount result)
+     PureDBState (Imports.collection_remove collection (Query filter_bson))
 
 export
 collection_count : (filter : String) -> DBState State DBResult
